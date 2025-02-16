@@ -1,6 +1,6 @@
 # Platypus-Type-Extensions
 
-##Types:
+## Types:
 
 1. **Categorical List**
     1. Example: ("category_1", "category_2", ..., "category_n")
