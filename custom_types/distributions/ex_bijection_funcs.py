@@ -4,11 +4,9 @@ from functools import partial
 
 
 def _half_life_return(x, ub, A, T): # try guvectorize
-    print(f"here x = {x}")
     return ub + A*(2.0**(x/T))
 
 def _half_life_inverse(y, ub, B, m): # try guvectorize
-    print(f"here y = {y}")
     if y >= ub:
         return ub
     return B * np.log(m*(ub - y)) #store B*log(m)

@@ -78,11 +78,11 @@ def half_life_func(request):
     params = ['fixed_first', 'fixed_last', 'fixed_width_all', 'fixed_width_half', 'strict_points', 'variable', 'none'],
     ids = lambda v: f"min_distance_type={v}"
 )
-def min_distance_options(request) -> Literal['fixed_first', 'fixed_last', 'fixed_width_all', 'fixed_width_half', 'variable', 'strict_points' 'none']:
+def bound_options(request) -> Literal['fixed_first', 'fixed_last', 'fixed_width_all', 'fixed_width_half', 'variable', 'strict_points' 'none']:
     return request.param
 
 @pytest.fixture
-def half_life_bounds(half_life_func, min_distance_options):
+def half_life_bounds(half_life_func, bound_options):
     """Return:
         forward_func, inverse_func, bounds (PointBounds, y_min, y_max
     """
@@ -93,38 +93,43 @@ def half_life_bounds(half_life_func, min_distance_options):
         0.0, x_max, 
         inclusive_lower=True,
         inclusive_upper = True,
-        maximum_points = 100,
+        maximum_points = max_points,
         precision = 'double')
     
     x_max = bounds.dtype(x_max)
     eps = bounds.get_separation_eps()
     
-    if min_distance_options == 'fixed_first':
+    if bound_options == 'fixed_first':
         bounds.set_first_point_upper_bound(0.0)
         
-    elif min_distance_options =='fixed_last':
+    elif bound_options =='fixed_last':
         bounds.set_last_point_lower_bound(x_max)
         
-    elif min_distance_options == 'variable' or min_distance_options == 'strict_points':
+    elif bound_options == 'variable' or bound_options == 'strict_points':
         quarter = bounds.upper_bound / bounds.dtype(4)
-        mid = quarter = bounds.upper_bound / bounds.dtype(2)
+        mid = bounds.upper_bound / bounds.dtype(2)
+        print(f"mid: {mid}, quarter = {quarter}")
         if quarter >= max(min_x_separation, eps):
-            quarter = bounds.upper_bound / bounds.dtype(4)
+            print("here good")
             bounds.set_first_point_upper_bound(quarter)
+            assert np.isclose(bounds.max_first_point, quarter, 1e-7, 1e-8)
             bounds.set_last_point_lower_bound(mid)
         else:
             bounds.set_first_point_upper_bound(mid - 2.0*eps)
             bounds.set_last_point_lower_bound(mid + 2.0*eps)
-        if min_distance_options == 'strict_points':
+        if bound_options == 'strict_points':
             bounds.set_min_points(bounds.max_points)
+            assert bounds.min_points == bounds.max_points
             
-    elif min_distance_options =='fixed_width_all':
+    elif bound_options =='fixed_width_all':
         bounds.set_fixed_width(x_max)
         
-    elif min_distance_options =='fixed_width_half':
+    elif bound_options =='fixed_width_half':
         bounds.set_fixed_width(x_max / bounds.dtype(2))
         
-    assert bounds.max_points <= max(100,abs_max_points)
+    assert bounds.max_points <= min(100,abs_max_points)
+    print(f"bounds: {bounds!r}")
+    print(f"bound_type: {bound_options}\n")
     return forward_func, inverse_func, bounds, half_life_func['y_min'], half_life_func['y_max']
 
 
@@ -136,7 +141,7 @@ def half_life_real_bijection(half_life_bounds):
         bounds,
         inverse_func
     )
-    return bijection
+    return bijection, _, _
     
     
     

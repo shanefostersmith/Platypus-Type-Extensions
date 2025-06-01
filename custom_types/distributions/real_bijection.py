@@ -287,15 +287,15 @@ class RealBijection:
         self._y_bounds = None
         
         # Compute missing y bounds
-        if compute_y_bounds:
+        self._left_y_bounds = None
+        self._right_y_bounds = None
+        if compute_y_bounds and executable_forward:
             self.set_left_right_y_bounds()
         else:
             if y_min is not None and y_max is not None and not (y_min <= y_max):
                 raise ValueError("y_min must be less than or equal to y_max")
             self._y_bounds = (y_min, y_max)
 
-        self._left_y_bounds = None
-        self._right_y_bounds = None
    
     @staticmethod
     def _validate_map_func(map_func: Union[partial, callable], fixed_parameters: dict):
@@ -440,10 +440,12 @@ class RealBijection:
         else:
             if y_from_min_last is None:
                 warn("Unable to set y bound associated with the first x upper bound")
-    
+  
+        # If increase right = y_min then y_from_max_first, If decrease then y_max then y_from_max_first
         self._left_y_bounds = (y_min, y_from_max_first) if not self._decreasing else (y_max, y_from_max_first)
         self._right_y_bounds = (y_from_min_last, y_max) if not self._decreasing else (y_from_min_last, y_min) 
-        
+        # print(f"y_min: {y_min}, y_from_max_first: {y_from_max_first}, y_from_min_last {y_from_min_last}, y_max {y_max}")
+
     def fixed_forward_map(self,x):
         """
         Execute the forward map function with an input 'x' value
@@ -789,8 +791,8 @@ def compute_and_set_new_x_bounds(
     # Set x bounds and direction
     new_x_bounds = (min(x_from_y_min, x_from_y_max), max(x_from_y_min, x_from_y_max))
     if isinstance(bijection.point_bounds, PointBounds):
-        bijection.point_bounds.set_lower_bound(lower_bound=new_x_bounds[0])
-        bijection.point_bounds.set_upper_bound(lower_bound=new_x_bounds[1])
+        bijection.point_bounds.set_lower_bound(new_x_bounds[0])
+        bijection.point_bounds.set_upper_bound(new_x_bounds[1])
     elif isinstance(bijection.point_bounds, BoundsState):
         bijection.point_bounds._lower_bound = new_x_bounds[0]
         bijection.point_bounds._upper_bound = new_x_bounds[1]

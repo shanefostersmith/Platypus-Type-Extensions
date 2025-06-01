@@ -302,7 +302,7 @@ class PointBounds(BoundsViewMixin):
         if max_first_point is None:
             max_first_point = self.upper_bound - self.dtype(self.min_points - 1) * eps 
         
-        self.model.max_first_point = min(self.lower_bound, max(self.upper_bound - eps, self.dtype(max_first_point)))
+        self.model.max_first_point = max(self.lower_bound, min(self.upper_bound - eps, self.dtype(max_first_point)))
         self._cascade_from(CascadePriority.WIDTH)
     
     def set_last_point_lower_bound(self, min_last_point: Number | None):
@@ -325,7 +325,7 @@ class PointBounds(BoundsViewMixin):
         if min_last_point is None:
             min_last_point = self.lower_bound + self.dtype(self.min_points - 1) * eps 
             
-        self.model.min_last_point = max(self.upper_bound, min(self.lower_bound + eps, self.dtype(min_last_point)))    
+        self.model.min_last_point = min(self.upper_bound, max(self.lower_bound + eps, self.dtype(min_last_point)))    
         self._cascade_from(CascadePriority.WIDTH)
 
     def set_min_separation(self, min_separation: Number | None):    
