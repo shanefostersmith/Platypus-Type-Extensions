@@ -131,9 +131,9 @@ class RealBijection:
     """
    
     def __init__(self, 
-                 forward_function: callable | partial, 
+                 forward_function: Union[callable, partial], 
                  x_point_bounds: PointBounds | BoundsState,
-                 inverse_function: callable | partial | None = None, 
+                 inverse_function: Union[callable, partial] | None = None, 
                  fixed_forward_keywords: dict = {}, 
                  fixed_inverse_keywords: dict = {}, 
                  compute_y_bounds: bool = True, 
@@ -412,8 +412,7 @@ class RealBijection:
        """
        
         # compute y min and y_max if they do not exist
-        y_min, y_max = self._y_bounds
-        if y_min is None or y_max is None:
+        if self._y_bounds is None or self._y_bounds[0] is None or self._y_bounds[1] is None:
             try:
                 compute_and_set_missing_y_bounds(self, set_direction=True, raise_execution_errors=True)
             except Exception as e:

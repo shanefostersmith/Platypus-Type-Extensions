@@ -24,7 +24,8 @@ class TestPointBounds:
         # print(f"max_points: {simple_point_bounds.max_points}")
         
         for constr, body_value, infeasible in find_infeasible_constraints(simple_point_bounds.model):
-            raise ValueError(f"An infeasible constraint found: {str(constr)}: {body_value}")
+            raise ValueError(f"An infeasible constraint found: {str(constr)}: {body_value}. Type {infeasible}")
+        print(f"Bounds: {simple_point_bounds!r}")
     
     def test_cardinality_set(self, simple_point_bounds: PointBounds):
         orig_min_points = simple_point_bounds.min_points
@@ -54,7 +55,6 @@ class TestPointBounds:
         new_lb, new_ub = simple_point_bounds.get_full_bounds()
         assert orig_lb == new_lb and orig_ub == new_ub
         assert simple_point_bounds.max_separation * (simple_point_bounds.min_points - 1) <= bound_width
-        
         
         for constr, body_value, _ in find_infeasible_constraints(simple_point_bounds.model):
             raise ValueError(f"An infeasible constraint found: {str(constr)}: {body_value}")
@@ -218,5 +218,26 @@ class TestPointBounds:
         
         for constr, body_value, infeasible in find_infeasible_constraints(simple_point_bounds.model):
             raise ValueError(f"An infeasible constraint found: {str(constr)}: {body_value}. Type {infeasible}")
+        
+class TestBijection:
+    def test_init(self, half_life_bounds):
+        forward_func, inverse_func, bounds, y_min, y_max = half_life_bounds
+        print(f"y_min = {y_min}, y_max = {y_max}")
+        assert bounds.lower_bound == 0.0
+        bijection = real_bijection.RealBijection(
+            forward_func,
+            bounds,
+            inverse_func,
+            compute_y_bounds=True
+        )
+        rtol = 1e-7 if bounds.dtype == np.float64 else 1e-5
+        atol = 1e-8 if bounds.dtype == np.float64 else 1e-6
+        calc_y_min, calc_y_max = bijection.y_bounds 
+        assert calc_y_max > calc_y_min
+        assert np.isclose(calc_y_min, y_min, rtol, atol), f"foward_func of x_max: {forward_func(bounds.upper_bound)}, calcated y_min {y_min}"
+        assert np.isclose(calc_y_max, y_max, rtol, atol), f"foward_func of 0.0 {0.0}, calculated y_max {y_max}"
+        assert bijection.direction is True #decreasing
+        
+        
         
         

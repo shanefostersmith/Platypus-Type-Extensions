@@ -183,7 +183,7 @@ class PointBounds(BoundsViewMixin):
         self._dtype = dtype
         lower_bound = dtype(lower_bound)
         upper_bound = dtype(upper_bound)
-        eps = max(np.spacing(abs(lower_bound), dtype = dtype), np.spacing(abs(upper_bound), dtype = dtype), np.finfo(dtype).eps)
+        eps = max(np.spacing(abs(lower_bound), dtype = dtype), np.spacing(abs(upper_bound), dtype = dtype))
         inclusive_lower_bound = lower_bound + eps
         inclusive_upper_bound = upper_bound - eps
         if inclusive_lower_bound >=  inclusive_upper_bound:
@@ -191,10 +191,6 @@ class PointBounds(BoundsViewMixin):
 
         self.model.eff_lower = pyo.Param(initialize = inclusive_lower_bound if not inclusive_lower else lower_bound, mutable = True, within=pyo.Reals)
         self.model.eff_upper = pyo.Param(initialize = inclusive_upper_bound if not inclusive_upper else upper_bound, mutable = True, within=pyo.Reals)
-        max_first = inclusive_upper_bound - (dtype(minimum_points - 1) * eps)
-        min_last = inclusive_lower_bound + (dtype(minimum_points - 1) * eps)
-        self.model.max_first_point = pyo.Param(initialize = max_first, mutable = True, within=pyo.Reals)
-        self.model.min_last_point = pyo.Param(initialize = min_last, mutable = True, within=pyo.Reals)
         
         minimum_points = int(minimum_points)
         maximum_points = np.inf if maximum_points is None else int(maximum_points)
@@ -209,16 +205,23 @@ class PointBounds(BoundsViewMixin):
         except:
             true_max_points = np.inf
         
+        min_separation = eps
         if not np.isinf(maximum_points):
             maximum_points =  min(true_max_points, maximum_points)
             minimum_points = min(minimum_points, maximum_points)
-        
+            # min_separation = (inclusive_upper_bound - inclusive_lower_bound) / dtype(maximum_points - 1)
         
         self.model.min_points = pyo.Param(initialize = minimum_points, mutable = True, within=pyo.PositiveIntegers)
         self.model.max_points = pyo.Param(initialize = maximum_points, mutable = True, within=pyo.PositiveReals)
-        self.model.min_separation = pyo.Param(initialize = eps, mutable = True, within=pyo.PositiveReals)
+        self.model.min_separation = pyo.Param(initialize = min_separation, mutable = True, within=pyo.PositiveReals)
         max_separation = (inclusive_upper_bound - inclusive_lower_bound) / dtype(minimum_points - 1)
         self.model.max_separation = pyo.Param(initialize = max_separation, mutable = True, within=pyo.PositiveReals)
+        
+        max_first = max(inclusive_lower_bound + eps, inclusive_upper_bound - (dtype(minimum_points - 1) * min_separation))
+        min_last = min(inclusive_upper_bound  - eps, inclusive_lower_bound + (dtype(minimum_points - 1) * min_separation))
+        self.model.max_first_point = pyo.Param(initialize = max_first, mutable = True, within=pyo.Reals)
+        self.model.min_last_point = pyo.Param(initialize = min_last, mutable = True, within=pyo.Reals)
+        
         self.model.fixed_width = pyo.Param(initialize = np.inf, mutable = True, within=pyo.PositiveReals)
         self.fixed_set = False
         self._set_all_constraints()
@@ -374,7 +377,7 @@ class PointBounds(BoundsViewMixin):
         self.model.min_separation = min(self.min_separation, max_separation)
         self._cascade_from(CascadePriority.SEPARATION, 'max')
     
-    def set_min_points(self, min_points: Number | None):
+    def set_min_points(self, min_points: Number | None): # Add option to change first last point boounds
         """
         Set the minimum number of points (inclusive)
             Will raise an error if min_points < 2
@@ -398,7 +401,7 @@ class PointBounds(BoundsViewMixin):
         self.model.max_points = max(min_points, self.max_points)
         self._cascade_from(CascadePriority.POINTS, 'min')
     
-    def set_max_points(self, max_points: Number | None):
+    def set_max_points(self, max_points: Number | None): # Add options to change first last point boounds
         """
         Set the maximum number of points (inclusive)
             Will raise an error if max_points < 2
