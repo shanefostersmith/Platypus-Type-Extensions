@@ -1,6 +1,6 @@
 import pytest
 from custom_types.bins_and_sets.bins_and_sets import *
-from tests.conftest import single_variation_type
+
 @pytest.fixture(
     params=[
         (2,1),
@@ -12,10 +12,7 @@ from tests.conftest import single_variation_type
 def nsolutions_crossover(request):
     return request.param
 
-@pytest.fixture(
-    params = ['rand', 'equal'],
-    ids=lambda v: f"set_partition_init={v}"
-)
+@pytest.fixture( params = ['rand', 'equal'], ids=lambda v: f"set_partition_init={v}" )
 def set_partition_start(request):
     return request.param
 

@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 from custom_types.bins_and_sets.bins_and_sets import *
-from tests.conftest import create_one_var_solutions, noffspring
+from tests.conftest import create_one_var_solutions, deepcopy_parents
 from tests.test_bins_sets.conftest import *
 
 def test_set_partition_rand(set_partition_start, set_partition_dim):
@@ -20,19 +20,11 @@ def test_set_partition_crossover(set_partition_with_crossover, nsolutions_crosso
     nparents, offspring = nsolutions_crossover
     total_features, subset_size, bins = request.getfixturevalue("set_partition_dim")
     variator_name = request.getfixturevalue("set_partition_variator")
-    parent_sol, offspring_sol = create_one_var_solutions(set_partition_with_crossover, nparents, offspring)
+    parent_sol, offspring_sol, copy_indices = create_one_var_solutions(set_partition_with_crossover, nparents, offspring)
 
     orig_parent_vars = [np.copy(sol.variables[0]) for sol in parent_sol]
     orig_offspring_vars = None if variator_name != 'active_swap' else [np.copy(sol.variables[0]) for sol in offspring_sol]
-    copy_indices = [None for _ in range(offspring)]
-    if offspring == 1:
-        copy_indices[0] = 0
-    elif offspring == 2:
-        copy_indices[1] = 1
-    elif offspring == 3:
-        copy_indices[0] = 0
-        copy_indices[2] = 1
-    
+
     set_partition_with_crossover.local_variator.evolve(set_partition_with_crossover, parent_sol, offspring_sol, variable_index=0, copy_indices = copy_indices)
     for i, o in enumerate(offspring_sol):
         directory = o.variables[0]
@@ -51,7 +43,7 @@ def test_set_partition_crossover(set_partition_with_crossover, nsolutions_crosso
 # @pytest.mark.timeout(2)
 def test_set_partition_mutation(set_partition_with_mutation, request):
     
-    _, offspring_sol = create_one_var_solutions(set_partition_with_mutation)
+    _, offspring_sol, _= create_one_var_solutions(set_partition_with_mutation)
     total_features, subset_size, bins = request.getfixturevalue("set_partition_dim")
     variator_name = request.getfixturevalue("set_partition_mutator")
 
@@ -88,14 +80,13 @@ def test_weighted_set_rand(weighted_set_dim):
     assert np.isclose(np.sum(directory), 1.0, rtol = 1e-5, atol = 1e-6)
 
 # @pytest.mark.timeout(5)
-def test_weighted_set_crossover(weighted_set_with_crossover, nsolutions_crossover, request):
+def test_weighted_set_crossover(weighted_set_with_crossover, nsolutions_crossover, deepcopy_parents, request):
     nparents, offspring = nsolutions_crossover
     variator_name = request.getfixturevalue("weighted_set_variator")
-    parent_sol, offspring_sol = create_one_var_solutions(weighted_set_with_crossover, nparents, offspring, True)
+    parent_sol, offspring_sol, copy_indices = create_one_var_solutions(weighted_set_with_crossover, nparents, offspring, deepcopy_parents)
     
     orig_offspring_vars =  [np.copy(sol.variables[0]) for sol in offspring_sol]
     orig_parent_vars = [np.copy(sol.variables[0]) for sol in parent_sol]
-    copy_indices = [None for _ in range(offspring)]
 
     weighted_set_with_crossover.local_variator.evolve(weighted_set_with_crossover, parent_sol, offspring_sol, variable_index=0, copy_indices=copy_indices)
     for i, o in enumerate(offspring_sol):
@@ -121,7 +112,7 @@ def test_weighted_set_crossover(weighted_set_with_crossover, nsolutions_crossove
         
 
 def test_weighted_set_mutation(weighted_set_with_mutation, request):
-    _, offspring_sol = create_one_var_solutions(weighted_set_with_mutation)
+    _, offspring_sol, _ = create_one_var_solutions(weighted_set_with_mutation)
     orig_directory = np.copy(offspring_sol)
     weighted_set_with_mutation.local_variator.mutate(weighted_set_with_mutation, offspring_sol, variable_index=0)
     

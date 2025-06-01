@@ -83,6 +83,10 @@ def np_normalized_matrix32(nrows, ncols, zero_reference, zero_column):
 def single_variation_type(request):
     return request.param
 
+@pytest.fixture(params = [True, False], ids=lambda v: f"deepcopy={v}")
+def deepcopy_parents(request):
+    return request.param
+
 def simpleFunc(vars: list):
     """A Problem function for testing types. 
     
@@ -103,7 +107,7 @@ def create_one_var_solutions(custom_type: CustomType, nparents = 2, noffspring =
     """Create Solution objects for a Variator or Mutator
     
     If deepcopy is True, deepcopies parents in order to create offspring solutions. 
-        The last parent index is deepcopies multiple times if nparents < noffspring
+        The last parent index is deepcopied multiple times if nparents < noffspring
 
     Returns
         tuple[list[Solution], list[Solution]] | tuple[None, Solution]: 
@@ -114,9 +118,10 @@ def create_one_var_solutions(custom_type: CustomType, nparents = 2, noffspring =
     if issubclass(type(custom_type.local_variator), LocalMutator):
         offspring_sol = Solution(problem)
         offspring_sol.variables[0] = custom_type.rand()
-        return None, offspring_sol
+        return None, offspring_sol, [None]
     else:
         parent_solutions = [Solution(problem) for _ in range(nparents)]
+        copy_indices = [None for _ in range(noffspring)]
         offspring_solutions = None
         for sol in parent_solutions:
             sol.variables[0] = custom_type.rand()
@@ -128,7 +133,8 @@ def create_one_var_solutions(custom_type: CustomType, nparents = 2, noffspring =
             offspring_solutions = []
             for i in range(noffspring):
                 par_idx = min(nparents - 1, i)
+                copy_indices[i] = par_idx
                 offspring_solutions.append(copy.deepcopy(parent_solutions[par_idx]))
                     
-        return parent_solutions, offspring_solutions
+        return parent_solutions, offspring_solutions, copy_indices
 
