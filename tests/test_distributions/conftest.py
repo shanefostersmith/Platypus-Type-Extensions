@@ -90,23 +90,25 @@ def _add_bound_option(bounds: PointBounds, curr_option, x_max, min_x_separation,
         
     elif curr_option == 'variable' or curr_option == 'strict_points':
         
-        print(f"Before bounds set: min_sep {bounds.min_separation}, max_sep {bounds.max_separation}")
-        if curr_option == 'strict_points':
-            print(f"strict_points: orig min_sep {bounds.min_separation}, orig_max_sep {bounds.max_separation}")
-            print(f"orig_bounds: {bounds!r}")
-            bounds.set_min_points(bounds.max_points)
-            assert bounds.min_points == bounds.max_points
-            print(f"strict_points: min_separation < max_separation?: {bounds.min_separation < bounds.max_separation}")
-            print(f"new_bounds: {bounds!r}\n")
-        
+        # print(f"Before bounds set: min_sep {bounds.min_separation}, max_sep {bounds.max_separation}")
         quarter = bounds.upper_bound / bounds.dtype(4)
         mid = bounds.upper_bound / bounds.dtype(2)
         if quarter >= max(min_x_separation, eps):
             bounds.set_first_point_upper_bound(quarter)
             bounds.set_last_point_lower_bound(mid)
+            print("HERE QUARTER MID")
         else:
             bounds.set_first_point_upper_bound(mid - 2.0*eps)
             bounds.set_last_point_lower_bound(mid + 2.0*eps)
+        
+        if curr_option == 'strict_points':
+            print(f"orig_bounds: {bounds!r}")
+            bounds.set_min_points(bounds.max_points)
+            assert bounds.min_points == bounds.max_points
+            print(f"strict_points: min_separation < max_separation?: {bounds.min_separation < bounds.max_separation}")
+            print(f"true min_width: {bounds.true_min_width}")
+            
+            print(f"new_bounds: {bounds!r}\n")
         
             
     elif curr_option =='fixed_width_all':

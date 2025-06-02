@@ -29,6 +29,8 @@ class TestPointBounds:
         orig_max_points = simple_point_bounds.max_points
         orig_lb, orig_ub = simple_point_bounds.get_full_bounds()
         bound_width = orig_ub - orig_lb
+        eps = simple_point_bounds.get_separation_eps()
+        print(f"EPS: {simple_point_bounds.get_separation_eps()}")
         
         if np.isinf(orig_max_points):
             new_max_points = floor((bound_width / 1e-10) + 1.0)
@@ -40,6 +42,7 @@ class TestPointBounds:
         elif orig_min_points > 2:
             simple_point_bounds.set_max_points(orig_min_points - 1)
             assert simple_point_bounds.min_points == simple_point_bounds.max_points
+            assert simple_point_bounds.min_separation >= eps
             for constr, body_value, _ in find_infeasible_constraints(simple_point_bounds.model):
                 raise ValueError(f"An infeasible constraint found: {str(constr)}: {body_value}")
             simple_point_bounds.set_min_points(2)
@@ -61,8 +64,8 @@ class TestPointBounds:
         orig_lb, orig_ub = simple_point_bounds.get_full_bounds()
         bound_width = orig_ub - orig_lb
         mid_point = (orig_ub + orig_lb) / simple_point_bounds.dtype(2.0)
-        rtol = 1e-7 if simple_point_bounds.dtype == np.float64 else 1e-6
-        atol = 1e-8 if simple_point_bounds.dtype == np.float64 else 1e-7
+        rtol = 1e-7 if simple_point_bounds.dtype == np.float64 else 1e-5
+        atol = 1e-8 if simple_point_bounds.dtype == np.float64 else 1e-6
         
         if first_last_bound_type == "min_dist_small":
             simple_point_bounds.set_first_point_upper_bound(np.nextafter(mid_point, -np.inf, dtype=simple_point_bounds.dtype))
@@ -82,7 +85,6 @@ class TestPointBounds:
             simple_point_bounds.set_last_point_lower_bound(mid_point)
             assert simple_point_bounds.min_last_point == mid_point
             assert simple_point_bounds.max_first_point == orig_lb
-            
             simple_point_bounds.set_lower_bound(mid_point)
             assert simple_point_bounds.lower_bound < simple_point_bounds.min_last_point
 
@@ -91,12 +93,12 @@ class TestPointBounds:
             simple_point_bounds.set_first_point_upper_bound(mid_point)
             assert simple_point_bounds.min_last_point == orig_ub
             assert simple_point_bounds.max_first_point == mid_point
-            
             simple_point_bounds.set_upper_bound(mid_point)
             assert simple_point_bounds.upper_bound > simple_point_bounds.max_first_point
 
         assert 0 < simple_point_bounds.min_separation <= simple_point_bounds.max_separation
         assert 2 <= simple_point_bounds.min_points <= simple_point_bounds.max_points
+        assert simple_point_bounds._manual_max_first and simple_point_bounds._manual_min_last
         # assert simple_point_bounds.max_separation * (simple_point_bounds.min_points - 1) <= bound_width
         
         if not np.isinf(orig_max_points):

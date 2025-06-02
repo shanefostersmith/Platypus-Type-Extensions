@@ -227,6 +227,7 @@ class PointBounds(BoundsViewMixin):
         self._manual_min_last = False
         self._manual_max_first = False
         self._manual_max_separation = False
+        self._manual_min_separation = False
         self._set_all_constraints()
     
     def set_lower_bound(self, lower_bound: Number, inclusive = True, eps = 1e-8):
@@ -306,7 +307,7 @@ class PointBounds(BoundsViewMixin):
             self._manual_max_first = False
             max_first_point = max(self.lower_bound, self.upper_bound - self.dtype(self.min_points - 1) * self.min_separation)
         else:
-            self._manual_min_last = True
+            self._manual_max_first = True
             
         self.model.max_first_point = max(self.lower_bound, min(self.upper_bound - eps, self.dtype(max_first_point)))
         self._cascade_from(CascadePriority.WIDTH)
@@ -523,14 +524,12 @@ class PointBounds(BoundsViewMixin):
     def _set_all_constraints(self):
         """Call at init only"""
         self.model.max_width_constr = pyo.Constraint(rule = _max_width_rule)
-        self.model.min_width_constr = pyo.Constraint(
-            expr = (self.model.max_points - 1) * self.model.min_separation >= self.model.min_last_point - self.model.max_first_point
-        )
+        self.model.min_width_constr = pyo.Constraint(rule = _min_width_rule)
         self.model.bound_constr = pyo.Constraint(rule = _bound_width_rule)
         
         self.model.min_point_constr = pyo.Constraint(expr = self.model.min_points >= 2)
-        self.model.min_separation_constr = pyo.Constraint(rule = _min_separation_rule)
         self.model.point_constr = pyo.Constraint(expr = self.model.min_points <= self.model.max_points)
+        self.model.min_separation_constr = pyo.Constraint(rule = _min_separation_rule)
         self.model.separation_constr = pyo.Constraint(expr = self.model.min_separation <= self.model.max_separation)
         
         self.model.max_first_lb_constr = pyo.Constraint(expr = self.model.max_first_point >= self.model.eff_lower)
@@ -546,6 +545,7 @@ class PointBounds(BoundsViewMixin):
                 from_min = False if not from_bound else from_bound == 'min',
                 adjustable_max_first = not self._manual_max_first,
                 adjustable_min_last = not self._manual_min_last,
+                adjustable_min_separation = not self._manual_min_separation,
                 adjustable_max_separation = not self._manual_max_separation)
         elif level <= CascadePriority.WIDTH:
             bound_tools._cascade_from_points(
@@ -553,6 +553,7 @@ class PointBounds(BoundsViewMixin):
                 from_max_points = None,
                 adjustable_max_first = not self._manual_max_first,
                 adjustable_min_last = not self._manual_min_last,
+                adjustable_min_separation = not self._manual_min_separation,
                 adjustable_max_separation = not self._manual_max_separation)
         elif level <= CascadePriority.POINTS:
             bound_tools._cascade_from_points(
@@ -560,6 +561,7 @@ class PointBounds(BoundsViewMixin):
                 from_max_points = None if not from_bound else from_bound == 'max',
                 adjustable_max_first = not self._manual_max_first,
                 adjustable_min_last = not self._manual_min_last,
+                adjustable_min_separation = not self._manual_min_separation,
                 adjustable_max_separation = not self._manual_max_separation)
         elif level <= CascadePriority.SEPARATION:
             bound_tools._cascade_from_separation(
@@ -567,6 +569,7 @@ class PointBounds(BoundsViewMixin):
                 from_max_sep = False if not from_bound else from_bound == 'max',
                 adjustable_max_first = not self._manual_max_first,
                 adjustable_min_last = not self._manual_min_last,
+                adjustable_min_separation = not self._manual_min_separation,
                 adjustable_max_separation = not self._manual_max_separation)
         self._apply_state(level, bound_state)
     
@@ -637,12 +640,16 @@ def _model_to_value(model):
     lb = value(model.eff_lower)
     ub = value(model.eff_upper)
     dtype = ub.dtype.type
-    eps = max(np.spacing(abs(lb), dtype = dtype), np.spacing(abs(ub), dtype = dtype)) #, np.finfo(dtype).eps)
+    eps = max(np.spacing(abs(lb), dtype = dtype), np.spacing(abs(ub), dtype = dtype))
     return lb, ub, dtype, eps
         
 def _max_width_rule(model):
     max_width = min(value(model.fixed_width), value(model.eff_upper) - value(model.eff_lower))
     return (model.min_points-1) * model.max_separation <= np.nextafter(max_width, np.inf)
+
+def _min_width_rule(model):
+    min_width = value(model.min_last_point) - value(model.max_first_point)
+    return (model.max_points-1) * model.min_separation >= np.nextafter(min_width, -np.inf)
 
 def _min_last_lb_rule(model):
     _, _, dtype, eps = _model_to_value(model)
@@ -659,6 +666,6 @@ def _bound_width_rule(model):
     return model.eff_upper - model.eff_lower >= eps
 
 def _min_separation_rule(model):
-    _, _, _, eps = _model_to_value(model)
+    _, _, dtype, eps = _model_to_value(model)
     return model.min_separation >= eps
     
