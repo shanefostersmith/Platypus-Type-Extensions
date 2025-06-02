@@ -97,8 +97,7 @@ class MonotonicDistributions(CustomType):
         local_mutator = None,
         ordinal_maps = False,
         max_points: int = 1000,  
-        sort_ascending = True,
-        **variator_overrides):
+        sort_ascending = True):
         """
         Args
         --------
@@ -192,11 +191,13 @@ class MonotonicDistributions(CustomType):
             curr_min_points = x_bounds.min_points
             if curr_min_points < self.global_min_points:
                 self.global_min_points = curr_min_points
+                
             if np.isinf(x_bounds.max_points): # Set scalar max points
                 if isinstance(x_bounds, PointBounds):
                     x_bounds.set_max_points(max(x_bounds.min_points, max_points))
                 else:
                     self._add_max_points(x_bounds, max_points)
+                    
             curr_max_points = x_bounds.max_points
             if curr_max_points > self.global_max_points:
                 self.global_max_points = curr_max_points
@@ -209,11 +210,11 @@ class MonotonicDistributions(CustomType):
                 left_y, second_y = bijection.left_y_bounds
                 penult_y, right_y = bijection.right_y_bounds
                 assert all(var is not None for var in (left_y, second_y, penult_y, right_y)), "Error occured, all y bounds should have been set" 
+                
             if self.global_min_y > bijection.y_bounds[0]:
                 self.global_min_y = bijection.y_bounds[0]
             if self.global_max_y < bijection.y_bounds[1]:
                 self.global_max_y = bijection.y_bounds[1]
-                    
             self.map_suite.append(bijection)
             self.num_functions += 1
      
@@ -222,6 +223,7 @@ class MonotonicDistributions(CustomType):
 
         self.sort_ascending = sort_ascending
         self.ordinal_maps = ordinal_maps
+        super().__init__(local_variator=local_variator, local_mutator=local_mutator)
     
     def _add_max_points(self, bounds: bound_tools.BoundsState, default_max_points: int):
         """Adds default max points when using a BoundsState"""
@@ -233,22 +235,22 @@ class MonotonicDistributions(CustomType):
         bijection: RealBijection = self.map_suite[rand_function_idx] 
         x_bounds = bijection.point_bounds
         
-        x_min, max_x_start = x_bounds.first_point_bounds
-        min_x_end, x_max = x_bounds.last_point_bounds
+        x_min, max_first_x = x_bounds.first_point_bounds
+        min_last_x, x_max = x_bounds.last_point_bounds
  
         # Get start of random output
         output_start = None
         output_width = x_bounds.fixed_width
         true_min_width = x_bounds.true_min_width
         true_max_width = x_bounds.true_max_width
-        output_start = x_min if x_min == max_x_start else np.random.uniform(x_min, max_x_start)
+        output_start = x_min if x_min == max_first_x else np.random.uniform(x_min, max_first_x)
 
         # Get a random width of output
         if output_width is None:
             curr_max_width = min(x_max - output_start, true_max_width)
-            curr_min_width = None
-            if min_x_end is not None and output_start < min_x_end:
-                curr_min_width = clip(min_x_end - output_start, true_min_width, curr_max_width)
+            curr_min_width = true_min_width
+            if output_start < min_last_x:
+                curr_min_width = max(min_last_x - output_start, true_min_width)
             output_width = curr_min_width if curr_min_width == curr_max_width else np.random.uniform(curr_min_width, curr_max_width)
         
         # Get random points
@@ -464,7 +466,7 @@ class PointSeparationMutation(LocalMutator):
     """
     _supported_types = MonotonicDistributions
     
-    def __init__(self, separation_mutation_rate, separation_alpha, separation_beta):
+    def __init__(self, separation_mutation_rate = 0.1, separation_alpha = 1, separation_beta = 10):
         self.separation_mutation_prob = separation_mutation_rate,
         self.separation_alpha = separation_alpha
         self.separation_beta = separation_beta
@@ -597,9 +599,12 @@ class DistributionBoundsPCX(LocalVariator):
             x_bounds = bijection.point_bounds
             true_min_width = x_bounds.true_min_width
             true_max_width = x_bounds.true_max_width
+            
             if true_min_width < true_max_width:
+                print("here found variable width")
                 all_fixed_width = False
             if not x_bounds.min_points == x_bounds.max_points:
+                print("here found variable_points")
                 all_fixed_points = False
             if y_based_pcx:
                 y1 = bijection.fixed_forward_map(distrib_info.output_min_x)
@@ -660,19 +665,26 @@ class DistributionBoundsPCX(LocalVariator):
                     apply_y_bound_pcx(
                         var_tuple, 
                         offspring_distrib, 
-                        custom_type.global_min_points, custom_type.global_max_points,
-                        y_width)
+                        bijection,
+                        custom_type.global_min_points, 
+                        custom_type.global_max_points,
+                        custom_type.global_min_y,
+                        custom_type.global_max_y)
                 else:
                     apply_x_bound_pcx(
                         var_tuple, 
                         offspring_distrib,
-                        custom_type.global_min_points, custom_type.global_max_points)
-        
+                        bijection.point_bounds,
+                        custom_type.global_min_points, 
+                        custom_type.global_max_points)
+    
+    @staticmethod 
     def _create_var_tuple(offspring_vars: np.ndarray, ncrossover_vars: int, all_fixed_points: bool):
         if ncrossover_vars == 1:
             return NormalizedOutput(start = offspring_vars[0])
-        if ncrossover_vars == 3:
+        elif ncrossover_vars == 3:
             return NormalizedOutput(start = offspring_vars[0], points = offspring_vars[1], end = offspring_vars[2])
-        if not all_fixed_points:
+        elif not all_fixed_points:
             return NormalizedOutput(start = offspring_vars[0], points = offspring_vars[1])
+        
         return NormalizedOutput(start = offspring_vars[0], end = offspring_vars[1])

@@ -1,9 +1,8 @@
 from .real_bijection import RealBijection
 from ._bounds_tools import BoundsViewMixin
-from ..utils import _min_max_norm_convert
+from ..utils import _min_max_norm_convert, clip
 from ._distribution_tools import *
 from numba import njit
-from utils import clip
 
 def map_conversion_x_based(prev_distribution: DistributionInfo, previous_bijection: RealBijection, new_bijection: RealBijection):
     """Returns:

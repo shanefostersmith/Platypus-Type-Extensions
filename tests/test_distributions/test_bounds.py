@@ -80,15 +80,19 @@ class TestPointBounds:
         elif first_last_bound_type == "fixed_first":
             simple_point_bounds.set_first_point_upper_bound(orig_lb)
             simple_point_bounds.set_last_point_lower_bound(mid_point)
+            assert simple_point_bounds.min_last_point == mid_point
+            assert simple_point_bounds.max_first_point == orig_lb
+            
             simple_point_bounds.set_lower_bound(mid_point)
-            assert simple_point_bounds.lower_bound == simple_point_bounds.max_first_point
             assert simple_point_bounds.lower_bound < simple_point_bounds.min_last_point
 
         else: #fixed_last
             simple_point_bounds.set_last_point_lower_bound(orig_ub)
             simple_point_bounds.set_first_point_upper_bound(mid_point)
+            assert simple_point_bounds.min_last_point == orig_ub
+            assert simple_point_bounds.max_first_point == mid_point
+            
             simple_point_bounds.set_upper_bound(mid_point)
-            assert simple_point_bounds.upper_bound == simple_point_bounds.min_last_point
             assert simple_point_bounds.upper_bound > simple_point_bounds.max_first_point
 
         assert 0 < simple_point_bounds.min_separation <= simple_point_bounds.max_separation

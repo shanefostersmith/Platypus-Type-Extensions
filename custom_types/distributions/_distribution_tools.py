@@ -29,7 +29,10 @@ def ordered_y_bounds(bijection: RealBijection):
     """
     first_y, second_y = bijection.left_y_bounds
     penult_y, last_y = bijection.right_y_bounds
-    return first_y, last_y, second_y, penult_y if not bijection.direction else last_y, first_y, penult_y, second_y
+    if not bijection.direction: # increasing func
+        return first_y, last_y, second_y, penult_y
+    else:
+        return last_y, first_y, penult_y, second_y
     
 def fast_point_addition(
     bijection: RealBijection,

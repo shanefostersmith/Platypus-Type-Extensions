@@ -127,7 +127,7 @@ class PointBounds(BoundsViewMixin):
             
                 -  `min_separation` * `(max_points - 1)` >= `min_width` 
                 
-                -  `max_separation` * `(min_points - 1)` <= `max_width` 
+                -  `max_separation` * `(min_points - 1)` <= `max_width`  #TODO: should be other way around (min_points - 1) * max_separation >= min_width
                 
                 -  `min_separation` <= `max_separation` and `min_points` <= `max_points`
 
@@ -224,6 +224,9 @@ class PointBounds(BoundsViewMixin):
         
         self.model.fixed_width = pyo.Param(initialize = np.inf, mutable = True, within=pyo.PositiveReals)
         self.fixed_set = False
+        self._manual_min_last = False
+        self._manual_max_first = False
+        self._manual_max_separation = False
         self._set_all_constraints()
     
     def set_lower_bound(self, lower_bound: Number, inclusive = True, eps = 1e-8):
@@ -288,8 +291,8 @@ class PointBounds(BoundsViewMixin):
         
         Will not be set if a fixed_width exists 
         
-        If None is inputted, the theoretical maximum value will be set (given minimum # of points and current epsilon)
-            - Minimum separation will be be set to epsilon
+        If None is inputted, value is set to the max of:
+            `lower_bound` and `upper_bound - (min_points - 1) * min_separation)`
         
         Raises:
             ValueError: If input > the upper bound
@@ -300,8 +303,11 @@ class PointBounds(BoundsViewMixin):
             raise ValueError(f"The input max fisrt point ({max_first_point}) > the upper bound ({self.upper_bound}")
         eps = self.get_separation_eps()
         if max_first_point is None:
-            max_first_point = self.upper_bound - self.dtype(self.min_points - 1) * eps 
-        
+            self._manual_max_first = False
+            max_first_point = max(self.lower_bound, self.upper_bound - self.dtype(self.min_points - 1) * self.min_separation)
+        else:
+            self._manual_min_last = True
+            
         self.model.max_first_point = max(self.lower_bound, min(self.upper_bound - eps, self.dtype(max_first_point)))
         self._cascade_from(CascadePriority.WIDTH)
     
@@ -311,7 +317,8 @@ class PointBounds(BoundsViewMixin):
         
         Will not be set if a fixed_width exists.
         
-        If None is inputted, the theoretical minimum value will be set (given minimum # of points and current epsilon)
+        If None is inputted, value is set to the min of:
+            `upper_bound` and `lower_bound + (min_points - 1) * min_separation)`
         
         Raises:
             ValueError: If input < the lower bound
@@ -323,7 +330,10 @@ class PointBounds(BoundsViewMixin):
         
         eps = self.get_separation_eps()
         if min_last_point is None:
-            min_last_point = self.lower_bound + self.dtype(self.min_points - 1) * eps 
+            self._manual_min_last = False
+            min_last_point = min(self.upper_bound, self.lower_bound + self.dtype(self.min_points - 1) * self.min_separation)
+        else:
+            self._manual_min_last = True
             
         self.model.min_last_point = min(self.upper_bound, max(self.lower_bound + eps, self.dtype(min_last_point)))    
         self._cascade_from(CascadePriority.WIDTH)
@@ -333,26 +343,44 @@ class PointBounds(BoundsViewMixin):
         Set the min separation (i.e. the minimum distance between adjacent points)
         
         If None is inputted, will default to the smallest normalized number defined by the 'dtype'
-        or the theoretical minimum if a min_width has been defined by 
-        `min_last_point - max_first_point` and `max_points` is set
+        or the theoretical minimum if a min_width has been defined
         
         Raises:
             ValueError: If input is > the bound width or a set fixed width
         """
         bound_width = self.bound_width
         max_width = min(value(self.model.fixed_width), bound_width)
-        if min_separation is None:
-            if self.max_first_point >= self.min_last_point or np.isinf(self.max_points):
-                min_separation = np.finfo(self.dtype).eps
+        eps = self.get_separation_eps()
+        
+        if min_separation is None: # set to abs minimum
+            self._manual_min_separation = False
+            if np.isinf(self.max_points):
+                min_separation = eps
+            elif self.fixed_width is not None:
+                min_separation = min(eps, self.fixed_width / self.dtype(self.max_points - 1))
             else:
-                min_separation = (self.min_last_point - self.max_first_point) / self.dtype(self.max_points - 1)
+                min_width = 0
+                strict_min_val = 0
+                if self._manual_max_first:
+                    min_width =  max(0, self.upper_bound - self._manual_max_first)
+                if self._manual_min_last:
+                    strict_min_val = self.min_last_point - self.max_first_point
+                    min_width = max(max_width, self.min_last_point - self.lower_bound)
+                    
+                min_separation = eps if min_width <= eps else max(eps, min_width / self.dtype(self.min_points - 1))
+                if strict_min_val > eps:
+                    try:
+                        min_separation = max(min_separation, strict_min_val / self.dtype(self.max_points - 1))
+                    except: # overflow when max_points large
+                        pass
         elif min_separation > max_width:
             raise ValueError(f"Input min_separation > max_width {max_width}")
-        if min_separation <= 0:
+        elif min_separation <= 0:
             raise ValueError(f"Input min_separation <= 0")
-        eps = self.get_separation_eps()
+        else:
+            self._manual_min_separation = True
+        
         min_separation = max(min_separation, eps)
-
         self.model.min_separation = self.dtype(min_separation)
         self.model.max_separation = max(min_separation, self.max_separation)
         self._cascade_from(CascadePriority.SEPARATION, 'min')
@@ -365,15 +393,20 @@ class PointBounds(BoundsViewMixin):
         """
         bound_width = self.bound_width
         max_width = min(value(self.model.fixed_width), bound_width)
-        ub = max_width / self.dtype(self.min_points - 1)
-        if max_separation is None or max_separation > ub:
-            max_separation = max_width / self.dtype(self.min_points - 1)
+        eps = self.get_separation_eps()
+        ub = max(eps, max_width / self.dtype(self.min_points - 1))
+        
+        
+        if max_separation is None:
+            max_separation = ub
+            self._manual_max_separation = False
         elif max_separation <= 0:
             raise ValueError(f"Input max_separation <= 0")
-        
-        eps = self.get_separation_eps()
-        max_separation = max(max_separation, eps)
-        self.model.max_separation = self.dtype(max_separation)
+        else:
+            self._manual_max_separation = True
+            max_separation = max(eps, min(self.dtype(max_separation), ub))
+            
+        self.model.max_separation = max_separation
         self.model.min_separation = min(self.min_separation, max_separation)
         self._cascade_from(CascadePriority.SEPARATION, 'max')
     
@@ -391,13 +424,16 @@ class PointBounds(BoundsViewMixin):
             raise ValueError(f"Min points must be > 1, got {min_points}")
         
         eps = self.get_separation_eps()
-        true_max_points = None
         try:
-            true_max_points = np.floor(self.bound_width / eps + 1)
-        except:
-            true_max_points = np.inf
+            min_points = min(min_points, max(1, int(self.bound_width / eps)) + 1)
+        except: # overflow
+            pass
         
-        self.model.min_points = min(true_max_points, min_points)
+        if not self._manual_max_separation: # set to max
+            max_width = self.fixed_width or self.bound_width
+            self.model.max_separation = max(eps, max_width / self.dtype(min_points - 1))
+     
+        self.model.min_points = min_points
         self.model.max_points = max(min_points, self.max_points)
         self._cascade_from(CascadePriority.POINTS, 'min')
     
@@ -416,14 +452,12 @@ class PointBounds(BoundsViewMixin):
             raise ValueError(f"Max points must be > 1, got {max_points}")
         
         eps = self.get_separation_eps()
-        true_max_points = None
         try:
-            true_max_points = np.floor(self.bound_width / eps + 1)
+            max_points = min(max_points, max(1, int(self.bound_width / eps)) + 1)
         except:
-            true_max_points = np.inf
+            pass
         
-        max_points = int(min(max_points, true_max_points))
-        self.model.max_points = min(max_points, true_max_points)
+        self.model.max_points = max_points
         self.model.min_points = min(self.min_points, max_points)
         self._cascade_from(CascadePriority.POINTS, 'max')
         
@@ -507,13 +541,33 @@ class PointBounds(BoundsViewMixin):
     def _cascade_from(self, level: CascadePriority, from_bound: Literal['max', 'min'] | None = None):
         bound_state = self.create_bounds_state()
         if level <= CascadePriority.GLOBAL:
-            bound_tools._cascade_from_global(bound_state, )
+            bound_tools._cascade_from_global(
+                bound_state, 
+                from_min = False if not from_bound else from_bound == 'min',
+                adjustable_max_first = not self._manual_max_first,
+                adjustable_min_last = not self._manual_min_last,
+                adjustable_max_separation = not self._manual_max_separation)
         elif level <= CascadePriority.WIDTH:
-            bound_tools._cascade_from_points(bound_state)
+            bound_tools._cascade_from_points(
+                bound_state, 
+                from_max_points = None,
+                adjustable_max_first = not self._manual_max_first,
+                adjustable_min_last = not self._manual_min_last,
+                adjustable_max_separation = not self._manual_max_separation)
         elif level <= CascadePriority.POINTS:
-            bound_tools._cascade_from_points(bound_state, from_max_points = None if not from_bound else from_bound == 'max')
+            bound_tools._cascade_from_points(
+                bound_state, 
+                from_max_points = None if not from_bound else from_bound == 'max',
+                adjustable_max_first = not self._manual_max_first,
+                adjustable_min_last = not self._manual_min_last,
+                adjustable_max_separation = not self._manual_max_separation)
         elif level <= CascadePriority.SEPARATION:
-            bound_tools._cascade_from_separation(bound_state, from_max_sep = False if not from_bound else from_bound == 'max')
+            bound_tools._cascade_from_separation(
+                bound_state, 
+                from_max_sep = False if not from_bound else from_bound == 'max',
+                adjustable_max_first = not self._manual_max_first,
+                adjustable_min_last = not self._manual_min_last,
+                adjustable_max_separation = not self._manual_max_separation)
         self._apply_state(level, bound_state)
     
     def _apply_state(self, level: CascadePriority, bound_state: bound_tools.BoundsState):

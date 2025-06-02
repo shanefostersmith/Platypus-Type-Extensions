@@ -1,14 +1,7 @@
 import pytest
 from custom_types.bins_and_sets.bins_and_sets import *
 
-@pytest.fixture(
-    params=[
-        (2,1),
-        (2,2),
-        (2,4)
-    ],
-    ids=lambda v: f"nsolutions={v}"
-)
+@pytest.fixture( params=[ (2,1), (2,2), (2,4) ], ids=lambda v: f"nsolutions={v}" )
 def nsolutions_crossover(request):
     return request.param
 

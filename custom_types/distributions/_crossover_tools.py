@@ -10,59 +10,59 @@ NormalizedOutput = namedtuple('NormalizedOutput', ['start', 'end', 'points'], de
 def _convert_new_start_y(
         bijection: RealBijection,
         new_y, 
-        x_min, x_max, max_first_x, min_last_x,
+        x_min, x_max, 
+        max_first_x, min_last_x,
         y_min, max_first_y
     ):
         """
-        Called after evolving a minimum y value
+        Called after evolving a minimum y value, associated x value in bound limits
             May return a new start x or new end x
         
         Returns `(new_start_x, new_end_x)`
         - One of `new_start_x` or `new_end_x` will be None
         """
+        assert x_min is not None and x_max is not None
         decreasing = bijection.direction
         new_x = None
         new_y = max(y_min, min(new_y ,max_first_y))
+        
         if new_y <= y_min:
-            new_x == x_min if not decreasing else x_max
+            new_x = x_max if decreasing else x_min 
         elif new_y >= max_first_y:
-            new_x = max_first_x if not decreasing else min_last_x
+            new_x = min_last_x if decreasing else max_first_x  
         else:
             new_x = bijection.fixed_inverse_map(new_y)
-        
-        new_start_x = new_x if not decreasing else None
-        new_end_x = None if new_start_x is not None else new_x
+
+        new_end_x = new_x if decreasing else None
+        new_start_x = None if new_end_x is not None else new_x
         return new_start_x, new_end_x
 
 def _convert_new_end_y(
         bijection:RealBijection,
         new_end_y, 
-        x_min, x_max, max_first_x, min_last_x,
+        x_min, x_max, 
+        max_first_x, min_last_x,
         y_max, min_last_y
     ):
         """
-        Called after evolving a maximum y value
+        Called after evolving a maximum y value, find associated x value in bounds
             May return a new start x or new end x
         
-        Returns `(new_start_x, new_end_x, new_width)`
-        - One of `new_start_x` or `new_end_x` will be None
+        Returns `new_x`
+        - May be `x_min` (if decreasing function) or `x_max` (if increasing function)
         """
         decreasing = bijection.direction
         new_x = None
-        new_end_y = max(min_last_y, min(new_end_y ,y_max))
-        if new_end_y  == y_max:
-            new_x == x_max if decreasing else x_min
-        elif new_end_y  == min_last_y:
-            if not decreasing:
-                new_x = min_last_x
-            else:
-                new_x = max_first_x 
+        new_end_y = max(min_last_y, min(new_end_y, y_max))
+        
+        if new_end_y == y_max:
+            new_x = x_min if decreasing else x_max
+        elif new_end_y == min_last_y:
+            new_x = max_first_x if decreasing else min_last_x
         else:
             new_x = bijection.fixed_inverse_map(new_end_y)
         
-        new_start_x = new_x if decreasing else None
-        new_end_x = None if new_start_x is not None else new_x
-        return new_start_x, new_end_x
+        return new_x
 
 def apply_y_bound_pcx(
     new_offspring_vars: NormalizedOutput,
@@ -96,26 +96,35 @@ def apply_y_bound_pcx(
     new_x_width = None
     true_min_width = x_bounds.true_min_width
     true_max_width = x_bounds.true_max_width
-    if true_min_width == true_max_width:
-        new_x_width = true_min_width
+    print(f"apply y bounds: min_width = {true_min_width}, max_width = {true_max_width}")
+    if true_min_width >= true_max_width:
+        new_x_width = true_max_width
 
     new_start_y = _min_max_norm_convert(global_min_y, global_max_y, new_offspring_vars.start, to_norm = False)
     new_start_x, new_end_x = _convert_new_start_y(
         bijection, new_start_y, 
         x_bounds.lower_bound, x_bounds.upper_bound, 
         x_bounds.max_first_point, x_bounds.min_last_point,
-        y_min, max_first_y, true_min_width)
+        y_min, max_first_y
+    )
+    assert new_start_x is not None or new_end_x is not None
     
     if new_x_width is not None: # Fixed width
         new_start_x = new_start_x if new_start_x is not None else new_end_x - new_x_width
         
     else: # Convert end_y, find x_width
         new_end_y = _min_max_norm_convert(global_min_y, global_max_y, new_offspring_vars.end, to_norm = False)
-        new_start_x, new_end_x, _ = _convert_new_end_y(
+        other_x = _convert_new_end_y(
             bijection, new_end_y, 
             x_bounds.lower_bound, x_bounds.upper_bound, 
             x_bounds.max_first_point, x_bounds.min_last_point,
-            y_max, min_last_y, true_min_width)
+            y_max, min_last_y
+        )
+        if new_start_x is not None:
+            new_end_x = other_x
+        else:
+            new_start_x = other_x
+            
         new_x_width = x_bounds.dtype(max(true_min_width, min((new_end_x - new_start_x), true_max_width)))
         
     new_end_x = x_bounds.dtype(new_start_x) + new_x_width
@@ -150,17 +159,18 @@ def apply_x_bound_pcx(
     new_x_width = None
     true_min_width = x_bounds.true_min_width
     true_max_width = x_bounds.true_max_width
-    if true_min_width == true_max_width:
-        new_x_width = true_min_width
+    if true_min_width >= true_max_width:
+        new_x_width = true_max_width
     x_min, max_first_x = x_bounds.first_point_bounds
     min_last_x, x_max = x_bounds.last_point_bounds
     new_max_first = min(max_first_x, x_max - true_min_width)
     
-    new_start_x = max(x_min, min(new_max_first, _min_max_norm_convert(x_min, x_max, new_offspring_vars.start, to_norm = False)))
+    new_start_x = max(x_min, min(new_max_first, _min_max_norm_convert(x_min, x_max, new_offspring_vars.start, False)))
     new_end_x = None
     if new_x_width is None: 
         new_min_last = max(min_last_x, new_start_x + true_min_width)
-        new_end_x = max(new_min_last, min(x_max, _min_max_norm_convert(x_min, x_max, new_offspring_vars.end, to_norm = False)))
+        assert new_offspring_vars.end is not None
+        new_end_x = max(new_min_last, min(x_max, _min_max_norm_convert(x_min, x_max, new_offspring_vars.end, False)))
         new_x_width = x_bounds.dtype(min(true_max_width, new_end_x - new_start_x))
     
     new_end_x = x_bounds.dtype(new_start_x) + new_x_width
