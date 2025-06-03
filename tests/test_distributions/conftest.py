@@ -96,27 +96,22 @@ def _add_bound_option(bounds: PointBounds, curr_option, x_max, min_x_separation,
         if quarter >= max(min_x_separation, eps):
             bounds.set_first_point_upper_bound(quarter)
             bounds.set_last_point_lower_bound(mid)
-            print("HERE QUARTER MID")
         else:
             bounds.set_first_point_upper_bound(mid - 2.0*eps)
             bounds.set_last_point_lower_bound(mid + 2.0*eps)
         
         if curr_option == 'strict_points':
-            print(f"orig_bounds: {bounds!r}")
             bounds.set_min_points(bounds.max_points)
             assert bounds.min_points == bounds.max_points
-            print(f"strict_points: min_separation < max_separation?: {bounds.min_separation < bounds.max_separation}")
-            print(f"true min_width: {bounds.true_min_width}")
-            
-            print(f"new_bounds: {bounds!r}\n")
-        
-            
+
     elif curr_option =='fixed_width_all':
         bounds.set_fixed_width(x_max)
         
     elif curr_option =='fixed_width_half':
         bounds.set_fixed_width(x_max / bounds.dtype(2))
     
+    if bounds.min_separation <= 1e-8:
+        bounds.set_min_separation(1e-8)
 
 @pytest.fixture
 def half_life_bounds(half_life_func, bound_options, x_max):
@@ -139,8 +134,6 @@ def half_life_bounds(half_life_func, bound_options, x_max):
     _add_bound_option(bounds, bound_options, x_max, min_x_separation, eps)
         
     assert bounds.max_points <= min(100,abs_max_points)
-    # print(f"bounds: {bounds!r}")
-    # print(f"bound_type: {bound_options}\n")
     return forward_func, inverse_func, bounds, half_life_func['y_min'], half_life_func['y_max']
 
 @pytest.fixture
@@ -208,7 +201,6 @@ def all_monotonic_distributions(combined_mono_distribution_options, distribution
         for bound_option in BOUND_OPTIONS:
             _add_bound_option(bounds, bound_option, x_max, min_x_separation, eps)
             assert bounds.max_points <= min(100,abs_max_points)
-            
             bijections.append(real_bijection.RealBijection(
                 forward_func,
                 bounds,
@@ -260,7 +252,7 @@ def distribution_bound_mutation(distribution_mutator, all_monotonic_distribution
     elif distribution_mutator == 'shift':
         local_variator = DistributionShift(0.999)
     else: # PointSeparationMutation
-        local_variator = PointSeparationMutation(0.999)
+        local_variator = PointSeparationMutation(0.999 , separation_alpha=2, separation_beta=2)
     
     all_monotonic_distributions.local_variator = local_variator
     all_monotonic_distributions.do_mutation = True
@@ -270,7 +262,8 @@ def distribution_bound_mutation(distribution_mutator, all_monotonic_distribution
 def deepcopy_parents(request):
     return request.param
 
-@pytest.fixture( params=[ (2,1), (2,2), (2,4) ], ids=lambda v: f"nsolutions={v}" )
+@pytest.fixture( params=[(3, 4), (2,1), (2,2)],
+                ids=lambda v: f"nsolutions={v}" )
 def nsolutions_crossover(request):
     return request.param
 
@@ -305,6 +298,7 @@ def create_one_var_solutions(custom_type: CustomType, nparents = 2, noffspring =
     if issubclass(type(custom_type.local_variator), LocalMutator):
         offspring_sol = Solution(problem)
         offspring_sol.variables[0] = custom_type.rand()
+        offspring_sol.evaluated = True
         return None, offspring_sol, [None]
     else:
         parent_solutions = [Solution(problem) for _ in range(nparents)]
@@ -316,12 +310,15 @@ def create_one_var_solutions(custom_type: CustomType, nparents = 2, noffspring =
             offspring_solutions = [Solution(problem) for _ in range(noffspring)]
             for sol in offspring_solutions:
                 sol.variables[0] = custom_type.rand()
+                sol.evaluated = True
         else:
             offspring_solutions = []
             for i in range(noffspring):
                 par_idx = min(nparents - 1, i)
                 copy_indices[i] = par_idx
-                offspring_solutions.append(copy.deepcopy(parent_solutions[par_idx]))
+                sol = copy.deepcopy(parent_solutions[par_idx])
+                sol.evaluated = True
+                offspring_solutions.append(sol)
                     
         return parent_solutions, offspring_solutions, copy_indices
     

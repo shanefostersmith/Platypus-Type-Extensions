@@ -16,6 +16,7 @@
             #  May require a new GlobalEvolution with shared/persistant memory (tracking "directions" that are promising, while keeping novelty of EP and GP searches)
 
 import numpy as np
+import copy
 from collections.abc import Iterable
 from collections import namedtuple
 from .real_bijection import RealBijection
@@ -335,7 +336,7 @@ class FixedMapConversion(LocalMutator):
             new_map_idx = ~distribution_info.map_index
         elif custom_type.ordinal_maps: #TODO change to gray
             binary_map_idx = int_to_gray_encoding(distribution_info.map_index, 0, custom_type.num_functions - 1)
-            new_map_bits, mutated = int_mutation(binary_map_idx)
+            new_map_bits, mutated = int_mutation(binary_map_idx, 0.0)
             if not mutated:
                 return
             new_map_idx = gray_encoding_to_int(0, custom_type.num_functions - 1, new_map_bits)
@@ -363,6 +364,7 @@ class FixedMapConversion(LocalMutator):
             y1 = prev_bijection.fixed_forward_map(distribution_info.output_min_x)
             y2 = prev_bijection.fixed_forward_map(distribution_info.output_max_x)
             new_min_x, new_max_x, new_separation, new_num_points = map_conversion_y_based(distribution_info, prev_output_min_y = min(y1,y2), prev_output_max_y = max(y1,y2), new_bijection = new_bijection)
+            
         else:
             new_min_x, new_max_x, new_separation, new_num_points = map_conversion_x_based(distribution_info, prev_bijection, new_bijection)
         
@@ -453,6 +455,7 @@ class SampleCountMutation(LocalMutator):
                 distribution_info.output_min_x += -1 * point_difference * distribution_info.separation
             else: # Removing points -> end at lower x ,  Adding points -> end at higher x 
                 distribution_info.output_max_x += point_difference * distribution_info.separation
+                
         offspring_solution.evaluated = False
 
 class PointSeparationMutation(LocalMutator):
@@ -467,7 +470,7 @@ class PointSeparationMutation(LocalMutator):
     _supported_types = MonotonicDistributions
     
     def __init__(self, separation_mutation_rate = 0.1, separation_alpha = 1, separation_beta = 10):
-        self.separation_mutation_prob = separation_mutation_rate,
+        self.separation_mutation_rate = separation_mutation_rate
         self.separation_alpha = separation_alpha
         self.separation_beta = separation_beta
     
@@ -475,7 +478,7 @@ class PointSeparationMutation(LocalMutator):
         distribution_info: DistributionInfo = offspring_solution.variables[variable_index]
         bijection: RealBijection = custom_type.map_suite[distribution_info.map_index]
         x_bounds = bijection.point_bounds
-        separation_mutation_prob = self.separation_mutation_prob
+        separation_mutation_prob = self.separation_mutation_rate
         if not custom_type.do_mutation or x_bounds.min_separation == x_bounds.max_separation or not (
             separation_mutation_prob > 0 and np.random.uniform() < separation_mutation_prob):
             return
@@ -525,7 +528,7 @@ class FixedMapCrossover(LocalVariator):
         parent_maps = [distrib_info.map_index for distrib_info in parent_distrib_info]
         if equal_choice:
             parent_maps = list(set(parent_maps))
-            if len(parent_maps == 1):
+            if len(parent_maps) == 1:
                 return
             
         if not custom_type.ordinal_maps:
@@ -537,10 +540,10 @@ class FixedMapCrossover(LocalVariator):
                         FixedMapConversion._execute_map_conversion(custom_type, distribution_info, previous_map=distribution_info.map_index, new_map=rand_map, y_based=y_based)
                         offspring.evaluated = False       
         else:
-            nparents = len(parent_solutions)
+            nmaps = len(parent_maps)
             nbits = _nbits_encode(0, custom_type.num_functions - 1)
-            parent_encoded_maps = np.empty((nparents, nbits), dtype = np.bool_)
-            for j in range(nparents):
+            parent_encoded_maps = np.empty((nmaps, nbits), dtype = np.bool_)
+            for j in range(nmaps):
                 parent_encoded_maps[j] = int_to_gray_encoding(parent_maps[j], 0, custom_type.num_functions - 1, nbits)
             for i, offspring in enumerate(offspring_solutions):
                 if np.random.uniform() < crossover_rate:
@@ -576,20 +579,17 @@ class DistributionBoundsPCX(LocalVariator):
         
         nparents = len(parent_solutions)
         parent_distributions: list[DistributionInfo] = self.get_solution_variables(parent_solutions, variable_index)
-        
+
         copy_groups = self.group_by_copy(copy_indices)
         unlabeled = copy_groups.get(-1)
-        new_copies = copy_indices
+        new_nparents = nparents
         if unlabeled: # add "unlabeled" offspring as parents
-            new_nparents = nparents
-            new_copies.copy()
             for offspring_idx in unlabeled:
-                new_copies[offspring_idx] = new_nparents 
                 copy_groups[new_nparents] = [offspring_idx]
                 new_nparents += 1
                 parent_distributions.append(offspring_solutions[offspring_idx].variables[variable_index])
             del copy_groups[-1]
-                
+              
         # Gather info on width, points, and calculate y values if applicable
         all_fixed_width = True
         all_fixed_points = True
@@ -601,10 +601,8 @@ class DistributionBoundsPCX(LocalVariator):
             true_max_width = x_bounds.true_max_width
             
             if true_min_width < true_max_width:
-                print("here found variable width")
                 all_fixed_width = False
             if not x_bounds.min_points == x_bounds.max_points:
-                print("here found variable_points")
                 all_fixed_points = False
             if y_based_pcx:
                 y1 = bijection.fixed_forward_map(distrib_info.output_min_x)
@@ -621,46 +619,64 @@ class DistributionBoundsPCX(LocalVariator):
         for i, distrib_info in enumerate(parent_distributions):
             bijection: RealBijection = custom_type.map_suite[distrib_info.map_index]
             x_bounds = bijection.point_bounds
-            
-            if not y_based_pcx: # Relative min val
+            # Relative min val
+            if not y_based_pcx: 
                 parent_vars[i,0] = (distrib_info.output_min_x - x_bounds.lower_bound) / x_bounds.bound_width
             else:
                 parent_vars[i,0] = (min_max_y[i][0] - custom_type.global_min_y) / y_width
+                
             if ncrossover_vars == 1:
                 continue
             
+            # Relative points
             curr_idx = 1 
-            if not all_fixed_points: # Relative points
+            if not all_fixed_points: 
                 parent_vars[i,1] = _min_max_norm_convert(custom_type.global_min_points, custom_type.global_max_points, distrib_info.num_points, True)
                 if ncrossover_vars == 2:
                     continue
                 curr_idx += 1
             
-            if not y_based_pcx: # Relative max val
+            # Relative max val
+            if not y_based_pcx: 
                 parent_vars[i,curr_idx] = distrib_info.output_max_x / x_bounds.bound_width
             else:
                 parent_vars[i,curr_idx] = (min_max_y[i][1] - custom_type.global_min_y) / y_width
 
         
         # Do PCX by "reference" parent
-        parent_to_row = np.arange(nparents, dtype=np.uint16)
-        row_to_parent = np.arange(nparents, dtype=np.uint16)
+        parent_to_row = np.arange(new_nparents, dtype=np.uint16)
+        row_to_parent = np.arange(new_nparents, dtype=np.uint16)
         for parent_idx, offspring_indices in copy_groups.items():
+            # print(f"parent_idx; {parent_idx}")
+            # print(f"row_to_parent: {row_to_parent}")
+            # print(f"parent_to_row: {parent_to_row}")
             
             # Swap parent copy to "reference" row
-            row_to_last = parent_to_row[parent_idx]
-            parent_vars[[row_to_last, -1]] = parent_vars[[-1, row_to_last]]
-            p_i, p_last = row_to_parent[i], row_to_parent[-1]
-            row_to_parent[i], row_to_parent[-1] = p_last, p_i
-            parent_to_row[p_i], parent_to_row[p_last] = nparents - 1, row_to_last
+            row_of_parent_idx = parent_to_row[parent_idx]
+            parent_vars[[row_of_parent_idx, -1]] = parent_vars[[-1, row_of_parent_idx]]
+            p_i, p_last = row_to_parent[row_of_parent_idx], row_to_parent[-1]
+            row_to_parent[row_of_parent_idx], row_to_parent[-1] = p_last, p_i
+            parent_to_row[p_i], parent_to_row[p_last] = new_nparents - 1, row_of_parent_idx
+            
+            # print(f"POST_SWAP: row_to_parent: {row_to_parent }")
+            # print(f"POST_SWAP: parent_to_row: {parent_to_row}")
             
             new_vars = normalized_2d_pcx(parent_vars, len(offspring_indices), eta, zeta, randomize=False)
             for i, offspring_idx in enumerate(offspring_indices):
+                
                 offspring_sol = offspring_solutions[offspring_idx]
                 offspring_sol.evaluated = False
                 offspring_distrib = offspring_sol.variables[variable_index]
-                var_tuple: NormalizedOutput = self._create_var_tuple(new_vars[i], ncrossover_vars, all_fixed_points)
+                offspring_map = offspring_distrib.map_index
+                bijection = custom_type.map_suite[offspring_map]
                 
+                var_tuple: NormalizedOutput = self._create_var_tuple(new_vars[i], ncrossover_vars, all_fixed_points)
+                # assert row_to_parent[-1] == parent_idx, f"actual parent index {copy_indices[offspring_idx] }"
+                # if parent_idx < nparents:
+                #     assert copy_indices[offspring_idx] == parent_idx
+                # else:
+                #     assert copy_indices[offspring_idx] == None, f"actual copy_index: {offspring_idx}"
+
                 if y_based_pcx:
                     apply_y_bound_pcx(
                         var_tuple, 
@@ -677,7 +693,7 @@ class DistributionBoundsPCX(LocalVariator):
                         bijection.point_bounds,
                         custom_type.global_min_points, 
                         custom_type.global_max_points)
-    
+                    
     @staticmethod 
     def _create_var_tuple(offspring_vars: np.ndarray, ncrossover_vars: int, all_fixed_points: bool):
         if ncrossover_vars == 1:

@@ -2,10 +2,11 @@ import numpy as np
 from numba import njit
 from functools import partial
 
-
+# @njit
 def _half_life_return(x, ub, A, T): # try guvectorize
     return ub + A*(2.0**(x/T))
 
+# @njit
 def _half_life_inverse(y, ub, B, m): # try guvectorize
     if y >= ub:
         return ub
@@ -13,6 +14,7 @@ def _half_life_inverse(y, ub, B, m): # try guvectorize
 
 def half_life_bijection(y_min, y_max, T, m, max_y_separation):
     """
+    (Note: The smallest distance between x values to produce unique y values is ~ `1e-8`)
 
     Args:
         y_min (_type_): _description_
@@ -41,13 +43,16 @@ def half_life_bijection(y_min, y_max, T, m, max_y_separation):
     if y_min >= y_max or 0 < max_y_separation + y_min >= y_max:
         raise ValueError(f"y_min must be greater than than y max, and max_y_separationn > 0 and < y_max - y_min. \n Got y_min {y_min}, y_max {y_max}, {max_y_separation}")
     
-    ub = 1.0 / m + y_max
-    B = (T/np.log(2))
+    m = np.float64(m)
+    T = np.float64(T)
+    ub = np.float64(1.0 / m) + np.float64(y_max)
+    B = T / np.float64(np.log(2))
+    
     penultimate_x = B * (np.log(m*(ub - (y_min + max_y_separation))))
     max_x = B * (np.log(m * (ub - y_min)))
     max_x_separation = max_x - penultimate_x
     max_points = int(max_x / max_x_separation) + 1
-    A = -1.0 / m
+    A = np.float64(-1.0) / m
     
     return (partial(_half_life_return, ub = ub, A = A, T = T), 
             partial(_half_life_inverse, ub = ub, B = B, m = m), 

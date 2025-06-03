@@ -336,7 +336,7 @@ class PointBounds(BoundsViewMixin):
         else:
             self._manual_min_last = True
             
-        self.model.min_last_point = min(self.upper_bound, max(self.lower_bound + eps, self.dtype(min_last_point)))    
+        self.model.min_last_point = min(self.upper_bound, max(self.lower_bound + eps, self.dtype(min_last_point)))  
         self._cascade_from(CascadePriority.WIDTH)
 
     def set_min_separation(self, min_separation: Number | None):    
@@ -374,6 +374,7 @@ class PointBounds(BoundsViewMixin):
                         min_separation = max(min_separation, strict_min_val / self.dtype(self.max_points - 1))
                     except: # overflow when max_points large
                         pass
+                    
         elif min_separation > max_width:
             raise ValueError(f"Input min_separation > max_width {max_width}")
         elif min_separation <= 0:
@@ -529,11 +530,13 @@ class PointBounds(BoundsViewMixin):
         
         self.model.min_point_constr = pyo.Constraint(expr = self.model.min_points >= 2)
         self.model.point_constr = pyo.Constraint(expr = self.model.min_points <= self.model.max_points)
+        
         self.model.min_separation_constr = pyo.Constraint(rule = _min_separation_rule)
         self.model.separation_constr = pyo.Constraint(expr = self.model.min_separation <= self.model.max_separation)
         
         self.model.max_first_lb_constr = pyo.Constraint(expr = self.model.max_first_point >= self.model.eff_lower)
         self.model.max_first_ub_constr = pyo.Constraint(rule = _max_first_ub_rule)
+        
         self.model.min_last_lb_constr  = pyo.Constraint(rule = _min_last_lb_rule)
         self.model.min_last_ub_constr = pyo.Constraint(expr = self.model.min_last_point <= self.model.eff_upper)
     
@@ -578,12 +581,11 @@ class PointBounds(BoundsViewMixin):
         self.model.max_points = bound_state.max_points
         self.model.min_separation = bound_state.min_separation 
         self.model.max_separation = bound_state.max_separation 
-        if level == CascadePriority.GLOBAL:
-            if self.fixed_set:
-                self.model.fixed_width = bound_state.fixed_width
-            self.model.max_first_point = bound_state.max_first_point
-            self.model.min_last_point = bound_state.min_last_point
-    
+        self.model.max_first_point = bound_state.max_first_point
+        self.model.min_last_point = bound_state.min_last_point
+        if level == CascadePriority.GLOBAL and self.fixed_set:
+            self.model.fixed_width = bound_state.fixed_width
+            
     @property
     def min_points(self) -> int:
         return value(self.model.min_points)

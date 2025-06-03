@@ -533,9 +533,10 @@ class RealBijection:
                 If True, output y values are mapped from last x to start x
                 
                 if False, output y values are mapped from start x to last x
-        """        
+        """     
         x_vals = (start_x + separation*i for i in range(num_points)) 
         iter = map(self.forward_function, x_vals)
+        # x_vals_comp = np.fromiter(iter=x_vals, dtype = self.dtype, count = num_points)
         try:
             distribution = np.fromiter(iter=iter, dtype = self.dtype, count = num_points)
             if reverse_x:
@@ -544,7 +545,8 @@ class RealBijection:
         except Exception as e:
             print(f"Error creating output with x0 = {start_x}, num_points = {num_points}, separation = {separation}: \n {e}")
             raise
-   
+        
+        
     def vectorized_create_distribution(self, start_x, num_points, separation, reverse_x = False):
         """Assuming the forward map can accept numpy arrays as input, a faster implementation to create output distributions
             

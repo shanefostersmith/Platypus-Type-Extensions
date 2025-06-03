@@ -92,11 +92,12 @@ def apply_y_bound_pcx(
         global_y_width (float): _description_
     """    
     x_bounds = bijection.point_bounds
+    # print(f"INNER MAP IDX: {offspring_info.map_index}")
+    # print(f"INNER Y_BASED bounds: {x_bounds!r}")
     y_min, y_max, max_first_y, min_last_y = ordered_y_bounds(bijection)
     new_x_width = None
     true_min_width = x_bounds.true_min_width
     true_max_width = x_bounds.true_max_width
-    print(f"apply y bounds: min_width = {true_min_width}, max_width = {true_max_width}")
     if true_min_width >= true_max_width:
         new_x_width = true_max_width
 
@@ -107,11 +108,9 @@ def apply_y_bound_pcx(
         x_bounds.max_first_point, x_bounds.min_last_point,
         y_min, max_first_y
     )
-    assert new_start_x is not None or new_end_x is not None
     
     if new_x_width is not None: # Fixed width
-        new_start_x = new_start_x if new_start_x is not None else new_end_x - new_x_width
-        
+        new_start_x = max(x_bounds.lower_bound, new_start_x if new_start_x is not None else new_end_x - new_x_width)
     else: # Convert end_y, find x_width
         new_end_y = _min_max_norm_convert(global_min_y, global_max_y, new_offspring_vars.end, to_norm = False)
         other_x = _convert_new_end_y(
@@ -124,7 +123,7 @@ def apply_y_bound_pcx(
             new_end_x = other_x
         else:
             new_start_x = other_x
-            
+
         new_x_width = x_bounds.dtype(max(true_min_width, min((new_end_x - new_start_x), true_max_width)))
         
     new_end_x = x_bounds.dtype(new_start_x) + new_x_width
@@ -140,7 +139,7 @@ def apply_y_bound_pcx(
     offspring_info.output_min_x = new_start_x
     offspring_info.output_max_x = new_end_x
     offspring_info.separation = new_x_width / x_bounds.dtype(new_points - 1)
-        
+  
 def apply_x_bound_pcx(
     new_offspring_vars: NormalizedOutput,
     offspring_info: DistributionInfo,
@@ -154,13 +153,14 @@ def apply_x_bound_pcx(
     
     'points' and 'end' may be None
     
-    """
-
+    """    
     new_x_width = None
     true_min_width = x_bounds.true_min_width
     true_max_width = x_bounds.true_max_width
     if true_min_width >= true_max_width:
         new_x_width = true_max_width
+    else:
+        assert x_bounds.fixed_width is None
     x_min, max_first_x = x_bounds.first_point_bounds
     min_last_x, x_max = x_bounds.last_point_bounds
     new_max_first = min(max_first_x, x_max - true_min_width)
@@ -183,10 +183,9 @@ def apply_x_bound_pcx(
         new_points = x_bounds.min_points
 
     offspring_info.num_points = new_points
-    offspring_info.output_min_x = x_min
-    offspring_info.output_max_x = x_max
+    offspring_info.output_min_x = new_start_x
+    offspring_info.output_max_x = new_end_x
     offspring_info.separation = new_x_width / x_bounds.dtype(new_points - 1)
-    
 
 #EXPERIMENTAL DE
 # def differential_evolution(

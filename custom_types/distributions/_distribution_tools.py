@@ -21,6 +21,9 @@ class DistributionInfo:
   
     def __hash__(self):
         return hash((self.map_index, self.num_points, self.output_min_x, self.separation))
+    
+    def __repr__(self):
+        return f"map_index: {self.map_index}, min: {self.output_min_x}, max: {self.output_max_x}, points: {self.num_points}, separation {self.separation}"
         
 def ordered_y_bounds(bijection: RealBijection):
     """Returns tuple:

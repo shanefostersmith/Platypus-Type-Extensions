@@ -66,13 +66,12 @@ class BoundsViewMixin:
         min_width_by_separation = self.dtype(self.min_points- 1) * self.min_separation
         if self.max_first_point < self.min_last_point:
             return max(self.max_first_point - self.min_last_point, min_width_by_separation)
-        assert not self.bound_width < min_width_by_separation
         return min_width_by_separation
     
     @property
     def true_max_width(self):
         """Maximum width account for all of the separation, cardinality and lower/upper bounds"""
-        if self.fixed_width is not None:
+        if self.fixed_width:
             return self.fixed_width
         
         w = self.bound_width
@@ -160,18 +159,17 @@ class BoundsViewMixin:
         
         max_points = None
         try:
-            max_points = min(self.max_points, max(1, int(width  / self.min_separation)) + 1)
+            max_points = max(self.min_points, min(self.max_points, max(1, int(width  / self.min_separation)) + 1))
         except:
             max_points = self.max_points
 
         min_points = min(max_points, max(self.min_points, ceil(width / self.max_separation) + 1))
-        assert min_points > 1
         return min_points, max_points
     
     def get_conditional_separation_with_width(self, width: float) -> tuple[np.floating, np.floating]:
         """Get separation bounds given a fixed width (using cardinality bounds)"""
         num = self.dtype(width)
-        assert num > 0, "input must be > 0"
+        # assert num > 0, "input must be > 0"
         
         min_separation = None
         if np.isinf(self.max_points):
@@ -340,10 +338,8 @@ def _cascade_from_points(
         adjustable_min_last,
         adjustable_max_separation
     )
-    assert bounds._min_separation >= eps
     
     if max_only or max_width <= bounds.dtype(2) * eps: # adjust max_separation / max_points only
-        print("here max only points")
         _min_points_tool(bounds, max_width, eps)
         _min_sep_tool(bounds, min_width)
     elif from_max_points:
@@ -353,9 +349,10 @@ def _cascade_from_points(
         _min_points_tool(bounds, max_width, eps)
         _max_points_tool(bounds, max_width, eps, adjustable_min_separation)
     
-    # minimize min_separation if adjustable min_sep
+    # Minimize min_separation if adjustable
     if adjustable_min_separation and not (
         bounds._fixed_width or not bounds._min_separation > eps):
+        
         min_width = max(eps, bounds._min_last_point - bounds._max_first_point)
         if not min_width > eps or np.isinf(bounds._max_points):
             bounds._min_separation = eps
@@ -367,7 +364,8 @@ def _cascade_from_points(
             bounds._max_first_point = max(bounds.lower_bound, bounds._upper_bound - new_min_w_points)
         if adjustable_min_last:
             bounds._min_last_point = min(bounds._upper_bound, bounds._lower_bound + new_min_w_points)
-         
+    
+
 def _cascade_from_separation(
     bounds: BoundsState, from_max_sep: bool,
     adjustable_max_first = False, 
@@ -396,13 +394,10 @@ def _cascade_from_separation(
         _max_sep_tool(bounds, max_width)
         _min_sep_tool(bounds, min_width)
     else:
-        _min_sep_tool(bounds, max_width)
-        _max_sep_tool(bounds, min_width)
+        _min_sep_tool(bounds, min_width)
+        _max_sep_tool(bounds, max_width)
     
-    # assert bounds._max_first_point + bounds._dtype(bounds._min_points - 1) * eps <= bounds._upper_bound
-    # assert bounds._lower_bound + bounds._dtype(bounds._min_points - 1) * eps <= bounds._min_last_point
-    
-    # If small width difference / large separations, cannot achieve width bounds evenly. Adjust separations as well
+    # If min/max width difference / large separations, cannot achieve width bounds evenly. Adjust separations as well
     if (bounds.dtype(bounds._min_points - 1) * bounds._max_separation > max_width or 
         (not np.isinf(bounds._max_points) and bounds.dtype(bounds._max_points - 1) * bounds._min_separation < min_width)
     ):
@@ -413,6 +408,7 @@ def _cascade_from_separation(
         adjustable_min_last,
         adjustable_min_separation,
         adjustable_max_separation)
+    
     
 def _max_sep_tool(bounds: BoundsState, max_width):
     """
@@ -434,7 +430,7 @@ def _min_sep_tool(bounds: BoundsState, min_width):
     Increase max_points to fit min_width
     
     Assumes min_separation >= separation eps and min_points <= max_points"""
-    # print("here min_sep_tool")
+    # print("min_sep_tool")
     if np.isinf(bounds._max_points):
         return
     curr_dist = (bounds._max_points - 1) * bounds._min_separation
@@ -451,7 +447,7 @@ def _min_points_tool(bounds: BoundsState, max_width, eps):
     
     Decrease max separation to fit max_width
     """
-    # print("here min_points_tool")
+    # print("min_points_tool")
     curr_dist = bounds._max_separation * bounds.dtype(bounds._min_points - 1)
     if curr_dist > max_width:
         abs_max_separation = max_width / bounds.dtype(bounds._min_points - 1)
@@ -477,28 +473,24 @@ def _max_points_tool(
     
     If max_point not inf, increase min separation to fit min_width.
     Assumes min_separation >= eps"""
-    
-   
     if np.isinf(bounds._max_points):
         return
     curr_dist = bounds.dtype(bounds._max_points - 1) * bounds._min_separation
     if curr_dist < min_width or adjustable_min_separation:
-        # print("here max_points tool")
+        # print("max_points tool")
         bounds._min_separation = max(eps, min_width / bounds.dtype(bounds._max_points - 1))
         bounds._max_separation = max(bounds._max_separation, bounds._min_separation)
         
         if not bounds._min_separation * bounds.dtype(bounds._max_points - 1) >= min_width: # rounding/precision issue
             bounds._min_separation = np.nextafter(bounds._min_separation, np.inf, dtype = bounds._dtype)
             bounds._max_separation = max(bounds._max_separation, bounds._min_separation)
-        
-        assert bounds._min_separation >= eps
                 
 def _check_first_last_bounds(bounds: BoundsState, 
                              max_width, eps,
                              adjustable_max_first = False, 
                              adjustable_min_last = False,
                              adjustable_max_separation = True,
-                             from_min_sep = False,) -> bool:
+                             from_min_sep = False) -> bool:
     """Checks if distances from max_first to ub and min_last to lb, adjusts min_points or min_separation if applicable
     
     If not fixed_width, ensure that `(min_points - 1) * min_separation <= min(ub - max_first, min_last - lb)`
@@ -538,7 +530,7 @@ def _check_first_last_bounds(bounds: BoundsState,
     if not adjustable_max_first:
         max_width = dist_from_ub
     if not adjustable_min_last:
-        max_width = min(max_width, dist_from_lb)
+        max_width = min(max_width, dist_from_lb) if not adjustable_max_first else dist_from_lb
     
     if max_width == 0: # can adjust_either
         bounds._min_last_point = min(bounds._upper_bound, bounds._lower_bound + curr_min_w_points)

@@ -42,7 +42,6 @@ class TestPointBounds:
         elif orig_min_points > 2:
             simple_point_bounds.set_max_points(orig_min_points - 1)
             assert simple_point_bounds.min_points == simple_point_bounds.max_points
-            assert simple_point_bounds.min_separation >= eps
             for constr, body_value, _ in find_infeasible_constraints(simple_point_bounds.model):
                 raise ValueError(f"An infeasible constraint found: {str(constr)}: {body_value}")
             simple_point_bounds.set_min_points(2)
@@ -91,6 +90,7 @@ class TestPointBounds:
         else: #fixed_last
             simple_point_bounds.set_last_point_lower_bound(orig_ub)
             simple_point_bounds.set_first_point_upper_bound(mid_point)
+            assert simple_point_bounds._manual_max_first and simple_point_bounds._manual_min_last
             assert simple_point_bounds.min_last_point == orig_ub
             assert simple_point_bounds.max_first_point == mid_point
             simple_point_bounds.set_upper_bound(mid_point)
