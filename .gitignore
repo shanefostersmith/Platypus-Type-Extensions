@@ -3,7 +3,7 @@ venv/
 .venv
 venv
 .pytest_cache/
-__pycache__
+__pycache__/
 *.pyo
 *.pyc
 

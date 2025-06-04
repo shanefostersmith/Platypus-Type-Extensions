@@ -88,10 +88,10 @@ class CustomType(PlatypusType):
         if local_variator is not None and local_mutator is not None:
             self.local_variator = LocalGAOperator(local_variator, local_mutator)
             self.do_evolution = True
-            self.do_mutation == True
+            self.do_mutation = True
         elif local_variator is None and local_mutator is None:
-            self.do_evolution == False
-            self.do_mutation == False
+            self.do_evolution = False
+            self.do_mutation = False
         elif local_variator is None and local_mutator is not None:
             self.local_variator = local_mutator
             self.do_mutation = True
@@ -165,14 +165,11 @@ class CustomType(PlatypusType):
             return True
     
     def __setattr__(self, name, value):
-        if name in ('do_mutation', 'do_evolution'):
-            super().__setattr__(name, value)
-            if not hasattr(self, "do_mutation") or not hasattr(self, "do_evolution"):
-                return
-            self._mut = self._can_evolve()
-            return
         super().__setattr__(name, value)
-    
+        if name in ('do_mutation', 'do_evolution'):
+            if hasattr(self, "do_mutation") and hasattr(self, "do_evolution"):
+                self._mut = self._can_evolve()
+
 def _single_memo_encode(self: CustomType, decoded):
     encoded = self._mem_encode(decoded)
     self._enc_temp = (encoded, decoded)
@@ -361,7 +358,7 @@ class LocalVariator(metaclass = ABCMeta):
 
         Returns:
             dict[int,list[int]]: 
-                A mapping from copy index to a list of offspring positions that share it. Offspring entries whose `copy_indices[i]` is `None` are grouped under the key `-1`.
+                A mapping from a copy index (ie. parent solution index) to a list of offspring positions that share it. Offspring entries whose `copy_indices[i]` is `None` are grouped under the key `-1`.
         """        
         unique_copies = {} 
         for i, copy_idx in enumerate(copy_indices):
@@ -392,7 +389,7 @@ class LocalVariator(metaclass = ABCMeta):
     
     def __init_subclass__(cls, **kwargs):
         types = getattr(cls, "_supported_types", None)
-        if types and not isinstance(types, TypeTuple):
+        if types is not None and not isinstance(types, TypeTuple):
             cls._supported_types = TypeTuple(types) if isinstance(types, type) else TypeTuple(*types)
         for t in cls._supported_types:
             if not isinstance(t, type):
@@ -673,7 +670,7 @@ class LocalGAOperator(LocalVariator):
             raise TypeError(f"The input 'local_variator' must be a LocalVariator that is not a LocalMutator, got {type(local_variator)})")
         if not isinstance(local_mutator, LocalMutator):
             raise TypeError(f"The input 'local_mutator' must be a LocalMutator, got {type(local_mutator)})")
-          
+        
         common_types =  local_variator._supported_types & local_mutator._supported_types
         if not common_types:
             v = local_variator.__name__
@@ -686,8 +683,8 @@ class LocalGAOperator(LocalVariator):
         self.local_variator = local_variator
         self.local_mutator = local_mutator
         self._supported_arity = local_variator._supported_arity
-        self.__supported_offspring__ = local_variator._supported_noffspring
-        self._supported_types = TypeTuple(common_types)
+        self._supported_noffspring = local_variator._supported_noffspring
+        self._supported_types = TypeTuple(*common_types)
         
     def evolve(self, custom_type: CustomType | PlatypusType, parent_solutions, offspring_solutions, variable_index, copy_indices, **kwargs):
         if not type(custom_type) in self._supported_types:
@@ -730,7 +727,7 @@ class LocalCompoundMutator(LocalMutator):
         if not common_types:
             raise TypeError("The inputted LocalMutators do not share at least one supported type. Ensure the variators have the _supported_types attribute set and the methods are compatible")
         
-        self._supported_types = TypeTuple(common_types)
+        self._supported_types = TypeTuple(*common_types)
         self.mutators = local_mutators
         self.num_mutators = len(local_mutators)
         self.randomize_start = randomize_start
@@ -881,11 +878,12 @@ class LocalSequentialOperator(LocalVariator):
         common_types = reduce(
             lambda a, b: a & b,
             (v._supported_types for v in local_variators)
+            # local_variators[0]._supported_types
         )
         if not common_types:
             raise TypeError("The inputted LocalVariators do not share at least one supported type. Ensure the variators have the _supported_types attribute set and the methods are compatible")
         
-        self._supported_types = TypeTuple(common_types)
+        self._supported_types = TypeTuple(*common_types)
         self._supported_arity  = (min_arity, None)
         self._supported_noffspring  = (min_noffspring, None)
         self.variators = local_variators
@@ -906,9 +904,9 @@ class LocalSequentialOperator(LocalVariator):
                 self.contains_swap += strategy == 'swap'
         else:
             if not offspring_selection in CROSSOVER_STRATEGIES:
-                raise ValueError(f"'{strategy} is not a valid 'offspring_selection' for a LocalVariator ")
+                raise ValueError(f"'{offspring_selection} is not a valid 'offspring_selection' for a LocalVariator ")
             if not mutation_selection in MUTATION_STRATEGIES:
-                raise ValueError(f"'{strategy} is not a valid 'mutation_selection' for a LocalMutator ")
+                raise ValueError(f"'{mutation_selection} is not a valid 'mutation_selection' for a LocalMutator ")
             self.mutation_selection = mutation_selection
             self.contains_swap = nvariators
         
@@ -933,12 +931,11 @@ class LocalSequentialOperator(LocalVariator):
         noffspring = len(offspring_solutions)
         nvariators = len(self.variators)
         start_idx = 0 if not self.randomize_start else np.random.randint(nvariators)
-        variator_sequence = [range(nvariators) if start_idx == 0 else (start_idx + i) % nvariators for i in range(nvariators)]
         
         if not do_evolution:
             self._mutation_only(
                 custom_type, parent_solutions, offspring_solutions, variable_index, copy_indices, 
-                nvariators, noffspring, start_idx, variator_sequence, **kwargs)
+                nvariators, noffspring, start_idx, **kwargs)
             return
         
         # Arity and copy_indices checks
@@ -953,28 +950,38 @@ class LocalSequentialOperator(LocalVariator):
         altered_offspring = None
         multi_strategy = isinstance(self.offspring_selection, list)
         previous_swap = False
-        idx = 0
-        while idx < nvariators:
-            variator = self.variators[variator_sequence[idx]]
+        idx = start_idx
+        while True:
+            variator = self.variators[idx]
             if do_mutation and isinstance(variator, LocalMutator):
-                strategy1 = self.mutation_selection if not multi_strategy else self.offspring_selection[variator_sequence[idx]]
+                strategy1 = self.mutation_selection if not multi_strategy else self.offspring_selection[idx]
                 altered_offspring = self._first_mutation(
-                    variator, custom_type, parent_solutions, offspring_solutions, variable_index, 
+                    variator, custom_type, 
+                    parent_solutions, offspring_solutions, 
+                    variable_index, copy_indices,
                     noffspring, strategy1, **kwargs
                 )
+                idx = (idx + 1) % nvariators
                 break
             elif not isinstance(variator, LocalMutator):
-                strategy1 = self.offspring_selection if not multi_strategy else self.offspring_selection[variator_sequence[idx]]
+                strategy1 = self.offspring_selection if not multi_strategy else self.offspring_selection[idx]
                 altered_offspring = self._first_variation(
-                    variator, custom_type, parent_solutions, offspring_solutions, variable_index, copy_indices,
-                    nparents, noffspring, idx, **kwargs
+                    variator, custom_type, 
+                    parent_solutions, offspring_solutions, 
+                    variable_index, copy_indices,
+                    nparents, noffspring, 
+                    strategy1, **kwargs
                 )
                 previous_swap = strategy1 == 'swap'
+                idx = (idx + 1) % nvariators
                 break
-            idx += 1
+            else:
+                idx = (idx + 1) % nvariators
+                if idx == start_idx:
+                    break
         
-        idx += 1
-        if idx >= nvariators:
+        if idx == start_idx:
+            print("here return")
             return
         
         # rest of variators
@@ -982,42 +989,46 @@ class LocalSequentialOperator(LocalVariator):
         self._multi_strategy(
             custom_type, parent_solutions, offspring_solutions, 
             variable_index, copy_indices,
-            altered_offspring, nparents, noffspring, 
-            idx, variator_sequence, 
+            altered_offspring, 
+            nparents, noffspring, 
+            start_idx, idx, nvariators, 
             swaps_left, do_mutation, **kwargs
         )
         
     
     def _multi_strategy(
         self, 
-        custom_type, 
-        parent_solutions: list[Solution], offspring_solutions: list[Solution], 
-        variable_index: int, copy_indices: dict, 
-        altered_offspring: set, nparents: int, noffspring: int, 
-        curr_idx: int, variator_sequence: list[int], 
-        swaps_left: int, do_mutation: bool , **kwargs):
+        custom_type, parent_solutions: list[Solution], offspring_solutions: list[Solution], 
+        variable_index: int, copy_indices: list, 
+        altered_offspring: set, 
+        nparents, noffspring, 
+        start_idx, curr_idx, nvariators, 
+        swaps_left, do_mutation, **kwargs):
         
         # Keep track of altered/unaltered offspring + parents that were updated
         num_altered = len(altered_offspring)
-        unaltered_offspring = set() if num_altered == noffspring else set(range(noffspring)).difference_update(altered_offspring)
+        unaltered_offspring = set() if num_altered == noffspring else set(range(noffspring)).difference(altered_offspring)
         previously_altered = altered_offspring.copy()
+        
+        
         orig_offspring_indices = [i for i in altered_offspring]
         original_parents = set(range(nparents))
         for i in orig_offspring_indices:
             copied_from = copy_indices[i]
             if copied_from is not None:
                 original_parents.discard(copied_from)
+        print(f"START_IDX: {start_idx}, First altered: {previously_altered}, Original Parents {original_parents}")
         
         multi_strategy = isinstance(self.offspring_selection, list)
         nvariators = len(self.variators)
-        while curr_idx < nvariators:
-            variator_idx = variator_sequence[curr_idx]
-            curr_variator = self.variators[variator_idx]
-            curr_idx += 1
+        while curr_idx != start_idx:
+            curr_variator = self.variators[curr_idx]
             
             # Mutation
             if isinstance(curr_variator, LocalMutator) and do_mutation: 
-                curr_strategy = self.mutation_selection or self.offspring_selection[variator_idx]
+                curr_strategy = self.mutation_selection or self.offspring_selection[curr_idx]
+                print(f"CURR IDX: {curr_idx}, MUT_STRATEGY: {curr_strategy}")
+                print(f'unaltered_before: {unaltered_offspring}')
                 
                 if curr_strategy == 'all':
                     curr_variator.evolve(custom_type, parent_solutions, offspring_solutions, variable_index, copy_indices, **kwargs)
@@ -1043,10 +1054,12 @@ class LocalSequentialOperator(LocalVariator):
                             original_parents.discard(copy_indices[rand_offspring_idx])
                         unaltered_offspring.discard(rand_offspring_idx)
                     previously_altered = {rand_offspring_idx}
-             
+
+                print(f"unaltered after: {unaltered_offspring}\n")
+            
             # Crossover       
             elif not isinstance(curr_variator, LocalMutator): 
-                curr_strategy = self.offspring_selection if not multi_strategy else self.offspring_selection[variator_idx]
+                curr_strategy = self.offspring_selection if not multi_strategy else self.offspring_selection[curr_idx]
                 new_parent_choices = None 
                 original_parent_choices = None
                 altered_offspring_choices = None 
@@ -1055,84 +1068,98 @@ class LocalSequentialOperator(LocalVariator):
                 
                 # Select parents from 'altered offspring' and uncopied/unused 'parent_solutions', 
                 # Select offspring from both altered and unaltered offspring
+                print(f"CURR IDX: {curr_idx}, STRATEGY: {curr_strategy}, VARIATOR {curr_variator.__class__.__name__}")
+                print(f'unaltered_before: {unaltered_offspring}, original_parents_before {original_parents}')
                 if curr_strategy == 'rand':
                     new_parent_choices, original_parent_choices, altered_offspring_choices, unaltered_offspring_choices = tools._rand_selection(
                         orig_offspring_indices, original_parents, unaltered_offspring, 
                         nparents, noffspring, swaps_left, 
                         min_arity, max_arity, min_noffspring, max_noffspring)
+                    
                 elif curr_strategy == 'swap':
                     new_parent_choices, original_parent_choices, altered_offspring_choices, unaltered_offspring_choices = tools._swap_selection(
                         orig_offspring_indices, original_parents, unaltered_offspring, previously_altered,
                         nparents, noffspring, swaps_left, 
                         min_arity, max_arity, min_noffspring, max_noffspring)
                     swaps_left -= 1
+
                 else:
                     new_parent_choices, original_parent_choices, altered_offspring_choices, unaltered_offspring_choices = tools._previous_selection(
                         orig_offspring_indices, original_parents, unaltered_offspring, previously_altered,
                         nparents, noffspring, swaps_left, 
                         min_arity, max_arity, min_noffspring, max_noffspring
                     )
+                    
+                print(f"new_parent_choices: {new_parent_choices}, original_parent_choices {original_parent_choices}")
+                print(f"altered_offspring_choices: {altered_offspring_choices}, unaltered_offspring_choices {unaltered_offspring_choices}")
                 
+                n_altered_choices = len(altered_offspring_choices)
+                if len(altered_offspring_choices) > 0:
+                    assert n_altered_choices == len(np.unique(altered_offspring_choices))
+                if len(unaltered_offspring_choices) > 0:
+                    assert len(unaltered_offspring_choices) == len(np.unique(unaltered_offspring_choices))
+                                                              
+                                                              
                 # Create new list of parent/offspring solutions, get new copy_indices
-                new_offspring, new_copy_indices, post_replacements = self._copy_indices_and_deepcopy(
+                new_offspring, new_copy_indices, post_replacements = tools._copy_indices_and_deepcopy(
                     offspring_solutions, variable_index, new_parent_choices, altered_offspring_choices
                 )
                 new_parents = [offspring_solutions[i] for i in new_parent_choices]
-                tools._unaltered_overlap(original_parents, copy_indices, original_parent_choices, new_copy_indices, len(new_parents))
-                new_parents.extend(parent_solutions[i] for i in original_parent_choices)
+                # track = None
+                # track_vars = None
+                # if len(new_parent_choices) > 0:
+                #     track = [i for i,p in enumerate(new_parent_choices) if any(a == p for a in altered_offspring_choices)]
+                #     track_vars = [deepcopy(offspring_solutions[new_parent_choices[t]].variables[0]) for t in track]
+                
+                tools._unaltered_overlap(
+                    original_parents, 
+                    copy_indices, 
+                    unaltered_offspring_choices,
+                    original_parent_choices, 
+                    new_copy_indices, 
+                    n_new_parents=len(new_parents)
+                )
+                if original_parent_choices:
+                    new_parents.extend(parent_solutions[i] for i in original_parent_choices)
                 new_offspring.extend(offspring_solutions[i] for i in unaltered_offspring_choices)
-
+                
+                # n_altered_choices = len(altered_offspring_choices)
+                # if n_altered_choices > 0:
+                #     print(f"ALTERED BEFORE: {[offspring_solutions[i].variables[variable_index] for i in altered_offspring_choices]}")
+                
+                print(f"NUM PARENTS: {len(new_parents)}")
+                print(f"NUM OFFSPRING: {len(new_offspring)}")
+                print(f"COPY_INDICES: {new_copy_indices}, (original {copy_indices})")
+                print(f"POST_REPLACEMENTS: {post_replacements}")
+                assert len(new_offspring) == len(new_copy_indices), f"new_copy_indices: {new_copy_indices}, post_replacements {post_replacements}"
+                assert all(idx is None or idx < len(new_parents) for idx in new_copy_indices)
+                 
                 # Pass new offspring into variator's evolve, do variable replacements + other updates
                 curr_variator.evolve(custom_type, new_parents, new_offspring, variable_index, new_copy_indices, **kwargs)
-                self._variable_replacement(offspring_solutions, new_offspring, post_replacements, variable_index)
+                # if n_altered_choices > 0:
+                #     str_after = ""
+                #     for k in range(n_altered_choices):
+                #         str_after += f"{[new_offspring[k].variables[variable_index]]}, "
+                #     print(f"OFFSPRING_AFTER_A: {str_after}\n")
+                
+                # if track is not None:
+                #     for t, var in zip(track, track_vars):
+                #         assert np.all(var == new_parents[t].variables[variable_index])
+        
+                tools._variable_replacement(offspring_solutions, new_offspring, post_replacements, variable_index)
+                # if n_altered_choices > 0:
+                #     print(f"OFFSPRING_AFTER_2: {[offspring_solutions[i].variables[variable_index] for i in altered_offspring_choices]}")
+ 
                 if unaltered_offspring_choices:
                     unaltered_offspring.difference_update(unaltered_offspring_choices)
                     orig_offspring_indices.extend(unaltered_offspring_choices)
                     altered_offspring.update(unaltered_offspring_choices)
                     num_altered += len(unaltered_offspring_choices)
                 previously_altered = set(altered_offspring_choices + unaltered_offspring_choices)
-
-    def _copy_indices_and_deepcopy(self, offspring_solutions: list[Solution], variable_index: int,
-                                   new_parent_choices: list, altered_offspring_choices: list):
-        """
-        Returns: tuple(list, list, list, list)
-            - 1. list of offspring_solutions (potential shallow_copies + deepcopied variable)
-            - 2. New copy_indices
-            - 3. list of "replacements" tuples -> (index of list 1, index of 'offspring_solutions')
-        """        
-        # no overlap
-        if not altered_offspring_choices: # no overlap
-            return [], [], []
-
-        idx_map = {}
-        copy_indices = []
-        output_altered_solutions = []
-        to_replace = []
-        for i, offspring_idx in enumerate(new_parent_choices):
-            idx_map[offspring_idx] = i
-        for i, offspring_idx in enumerate(altered_offspring_choices):
-            corresponding_idx = idx_map.get(offspring_idx)
-            if corresponding_idx is None:
-                copy_indices.append(None)
-                output_altered_solutions.append(offspring_solutions[offspring_idx])
-                continue
-            copy_indices.append(corresponding_idx)
-            to_replace.append((i, offspring_idx))
-            output_altered_solutions.append(tools._shallow_copy_solution(offspring_solutions[offspring_idx], variable_index))
-
-        return output_altered_solutions, copy_indices, to_replace
-        
-    def _variable_replacement(offspring_solutions: list[Solution], new_offspring: list[Solution], 
-                              replacement_indices: list[tuple[int,int]], variable_index: int):
-        """Update variable and evaluated flag of original offspring solution, for all replacements"""
-        if not replacement_indices:
-            return
-        for new_idx, offspring_idx in replacement_indices:
-            shallow_copy_sol = new_offspring[new_idx]
-            orig_offspring = offspring_solutions[offspring_idx]
-            orig_offspring.variables[variable_index] = shallow_copy_sol.variables[variable_index]
-            orig_offspring.evaluated = shallow_copy_sol.evaluated
-        
+                print(f'unaltered_after: {unaltered_offspring}, original_parents_after {original_parents}\n')
+            curr_idx = (curr_idx + 1) % nvariators
+            
+  
     def _get_arity_limits(self, variator: LocalVariator, nparents, noffspring):
         """returns: (min_arity, max_arity, min_noffspring, max_noffspring)"""
         max_arity = min(variator._supported_arity[1] or nparents, nparents)
@@ -1144,28 +1171,15 @@ class LocalSequentialOperator(LocalVariator):
     def _first_variation(
         self, variator: LocalVariator, 
         custom_type, parent_solutions: list, offspring_solutions: list, 
-        variable_index: int, copy_indices: list, unique_copies: dict, 
+        variable_index: int, copy_indices: list, 
         nparents, noffspring, strategy, **kwargs):
         """ Assumes variator is not mutator, no alteration of offspring has occured, 
         nparents >= min_arity, noffspring >= min_noffspring, len(copy_indices) == len(offspring_solutions)
         
-        Returns: set of offspring indices that were passed into thevariator
+        Returns: set of offspring indices that were passed into the variator
         """
         min_arity, max_arity, min_noffspring, max_noffspring = self._get_arity_limits(variator, nparents, noffspring)
         arity_difference = nparents - noffspring
-        
-        # Group offspring by the parent that was deepcopied to create it
-        unique_copies = {} 
-        labeled = 0
-        unlabeled = 0
-        for i, copy_idx in enumerate(copy_indices):
-            if copy_idx is None:
-                unlabeled += 1
-                unique_copies.setdefault(-1, []).append(i)
-            else:
-                labeled += 1
-                unique_copies.setdefault(copy_idx, []).append(i)
-        num_unique_copies = len(unique_copies) - (unlabeled > 0)
         
         # Choose output noffspring and nparents (close to original arity difference)
         out_nparents = None
@@ -1174,99 +1188,109 @@ class LocalSequentialOperator(LocalVariator):
             out_noffspring = min_noffspring
         elif self.contains_swap: # keep offspring avaliable for later swap
             out_noffspring = max(min_noffspring, max_noffspring + arity_difference) if arity_difference < 0 else max_noffspring
-            out_noffspring = max(min_noffspring, min(max_noffspring - (self.contains_swap - (strategy == 'swap')), out_noffspring))
+            out_noffspring = max(min_noffspring, min(max_noffspring - (self.contains_swap - int(strategy == 'swap')), out_noffspring))
         else:
             out_noffspring = max_noffspring
+            
         if min_arity == max_arity or arity_difference > 0:
             out_nparents = max_arity
         elif arity_difference < 0:
-            out_nparents = min_arity if out_noffspring - 1 <= min_arity else max(min_arity, min(max_arity, out_noffspring + arity_difference, num_unique_copies))
+            out_nparents = min_arity if out_noffspring - 1 <= min_arity else max(min_arity, min(max_arity, out_noffspring + arity_difference))
         else: 
             out_nparents = max(min_arity, min(max_arity, out_noffspring + arity_difference))
+        
+        print(f"FIRST: OUT_nparents {out_nparents}, OUT_noffspring: {out_noffspring}")
         
         # Trivial nparents vs. noffspring
         if out_nparents == nparents and out_noffspring == noffspring:
             variator.evolve(custom_type, parent_solutions.copy(), offspring_solutions.copy(), variable_index, copy_indices, **kwargs)
             return set(range(noffspring))
-        if labeled == 0: 
-            offspring_indices = np.random.choice(noffspring, out_noffspring, replace = False)
-            curr_copy_indices = [None for _ in range(out_noffspring)]
-            parent_indices = np.random.choice(nparents, out_nparents, replace = False)
-            new_parents = [parent_solutions[i] for i in parent_indices]
-            new_offspring = [offspring_solutions[i] for i in offspring_indices]
-            variator.evolve(custom_type, new_parents, new_offspring, variable_index, curr_copy_indices, **kwargs)
-            return set(offspring_indices)
         
-        # Choose parents/offspring, maintain diversity of parent solutions
+        # out_noffspring < noffspring
         out_offspring_indices = []
-        out_parents_indices = []
-        curr_copy_indices = []
-        offspring_left = []
-        to_add = out_noffspring
-        new_map = {}
-        p = 0
-        for p_key in range(nparents): # add 1 of each labeled parent
-            curr_offspring = unique_copies.get(p_key)
-            if not curr_offspring:
-                continue
-            out_offspring_indices.append(curr_offspring)
-            out_parents_indices.append(p_key)
-            curr_copy_indices.append(p)
-            new_map[p_key] = p
-            to_add -= 1
-            p += 1
-            if len(curr_offspring) > 1:
-                offspring_left.extend(out_offspring_indices[1:])
-            if p == out_nparents or not to_add:
-                break
-        if to_add: # add new offspring
-            nleft = len(offspring_left)
-            if nleft: 
-                new_off = offspring_left if nleft <= to_add else np.random.choice(offspring_left, to_add, replace = False)
-                for offspring_idx in new_off: # from parents that were copied > 1 time
-                    prev_key = copy_indices[offspring_idx]
-                    curr_copy_indices.append(new_map[prev_key])
-                    out_offspring_indices.append(offspring_idx)
-                    to_add -= 1
-            if to_add:
-                can_add = list(set(range(noffspring)).difference_update(out_offspring_indices))
-                for offspring_idx in can_add:
-                    copied_from = copy_indices[offspring_idx]
-                    if p < out_nparents and copied_from is not None:
-                        out_parents_indices.append(copied_from)
-                        curr_copy_indices.append(p)
-                        p += 1
-                    else:
-                        curr_copy_indices.append(None)
-                    out_offspring_indices.append(offspring_idx)
-                    to_add -= 1
-                    if not to_add:
-                        break
-        # add new parents
-        if p < out_nparents and out_nparents == nparents: 
-            out_parents_indices.extend(set(range(nparents)).difference_update(out_parents_indices))
-            new_parents = [parent_solutions[i] for i in out_parents_indices]
-            new_offspring = [offspring_solutions[i] for i in out_offspring_indices]
-            variator.evolve(custom_type, new_parents, new_offspring, variable_index, curr_copy_indices, **kwargs)
-            return set(out_offspring_indices)
-        if p < out_nparents:
-            existing_parents = set(out_parents_indices)
-            for parent_idx in range(nparents - 1, -1, -1):
-                if parent_idx in existing_parents:
+        if out_nparents == nparents:
+            seen_parents = set()
+            num_added = 0
+            offspring_left = []
+            new_copy_indices = []
+            for i, parent_idx in enumerate(copy_indices):
+                if parent_idx is None or parent_idx in seen_parents:
+                    offspring_left.append(i)
                     continue
-                out_parents_indices.append(parent_idx)
-                p += 1
-                if p == out_nparents:
+                
+                out_offspring_indices.append(i)
+                new_copy_indices.append(parent_idx)
+                seen_parents.add(parent_idx)
+                num_added += 1
+                if num_added == out_noffspring:
                     break
-        new_parents = [parent_solutions[i] for i in out_parents_indices]
-        new_offspring = [offspring_solutions[i] for i in out_offspring_indices]
-        variator.evolve(custom_type, new_parents, new_offspring, variable_index, curr_copy_indices, **kwargs)
-        return set(out_offspring_indices)
+                
+            if num_added < out_noffspring: 
+                if not num_added: # all unlabeled
+                    out_offspring_indices = offspring_left
+                    new_copy_indices = copy_indices.copy()
+                else:
+                    to_add = out_noffspring - num_added
+                    out_offspring_indices.extend(offspring_left[:to_add])
+                    new_copy_indices.extend(copy_indices[idx] for idx in offspring_left[:to_add])
+                    
+            new_offspring = [offspring_solutions[i] for i in  out_offspring_indices]
+            variator.evolve(custom_type, parent_solutions.copy(), new_offspring, variable_index, new_copy_indices, **kwargs)
+            return set(out_offspring_indices)
+        
+        # out_nparents < nparents
+        if out_noffspring == noffspring:
+            parent_map = {}
+            new_parents = []
+            new_copy_indices = copy_indices.copy()
+            added = 0
+            for i, parent_index in enumerate(copy_indices):
+                if parent_index is None:
+                    continue
+                if parent_index in parent_map:
+                    new_copy_indices[i] = parent_map[parent_index]
+                    continue
+                
+                parent_map[parent_index] = added
+                new_copy_indices[i] = added
+                new_parents.append(parent_solutions[parent_index])
+                added += 1
+                
+                if added == out_nparents:
+                    if i < noffspring - 1: # check remaining for unused copy_indices
+                        for j in range(i + 1, noffspring):
+                            prev_parent_idx = new_copy_indices[j]
+                            if new_copy_indices is not None and prev_parent_idx in parent_map:
+                                new_copy_indices[j] = parent_map[prev_parent_idx]
+                            else:
+                                new_copy_indices[j] = None
+                    break
+            
+            if not added: # all unlabeled
+                variator.evolve(custom_type, parent_solutions[:out_nparents].copy(), offspring_solutions.copy(), variable_index, new_copy_indices, **kwargs)
+                return set(range(noffspring))
+            if added < out_nparents:
+                uncopied= np.setdiff1d(np.arange(nparents), list(parent_map.keys()), assume_unique=True)
+                new_parents.extend(parent_solutions[i] for i in uncopied[:out_nparents-added])
+                assert len(new_parents == out_nparents)
 
+            variator.evolve(custom_type, new_parents, offspring_solutions.copy(), variable_index, new_copy_indices, **kwargs)
+            return set(range(noffspring))
+        
+        # out_noffspring < noffspring and out_nparents < nparents
+        return tools._first_variator_subset_case(
+            variator, custom_type,
+            parent_solutions, offspring_solutions,
+            copy_indices, variable_index,
+            out_nparents, out_noffspring,
+            nparents, noffspring, **kwargs
+        )
+    
     def _first_mutation(
-        self, variator: LocalMutator, 
-        custom_type, parents, offspring, variable_index, 
-        copy_indices: list, noffspring, strategy, **kwargs):
+        self, 
+        variator: LocalMutator, custom_type, 
+        parents, offspring, variable_index, copy_indices: list, 
+        noffspring, strategy, **kwargs):
         """ Assumes variator is a mutator and do_mutation is True. 
         Assumes no alteration of offspring has occured'""" 
         altered_offspring = None
@@ -1297,27 +1321,30 @@ class LocalSequentialOperator(LocalVariator):
             variator.evolve(custom_type, parents, [offspring[i] for i in altered_offspring], variable_index, copy_indices, **kwargs)
         return altered_offspring
     
-    def _mutation_only(self, custom_type, parent_solutions, offspring_solutions, variable_index, copy_indices, 
-                       nvariators: int, noffspring: int, idx, variator_sequence: list[int], **kwargs):
+    def _mutation_only(
+        self, 
+        custom_type, parent_solutions, offspring_solutions, variable_index, copy_indices, 
+        nvariators: int, noffspring: int, start_idx, **kwargs):
         """Used when there are no crossover variators, or when custom_type.do_evolution is False.
         No requirement updating parents"""
         
         multi = self.mutation_selection is None
+        curr_idx = start_idx
         if not multi and self.mutation_selection != 'rand':
-            while idx < nvariators:
-                variator: LocalVariator = self.variators[variator_sequence[idx]]
-                idx += 1
+            while True:
+                variator: LocalVariator = self.variators[curr_idx]
                 if isinstance(variator, LocalMutator):
                     variator.evolve(custom_type, parent_solutions, offspring_solutions, variable_index, copy_indices, **kwargs)
+                curr_idx = (curr_idx + 1) % nvariators
+                if curr_idx == start_idx:
+                    break
             return
             
         previously_altered = set()
-        while idx < nvariators:
-            variator_idx = variator_sequence[idx]
-            variator: LocalVariator = self.variators[variator_idx]
-            idx += 1
+        while True:
+            variator: LocalVariator = self.variators[curr_idx]
             if isinstance(variator, LocalMutator):
-                strategy = 'rand' if not multi else self.offspring_selection[variator_idx]
+                strategy = 'rand' if not multi else self.offspring_selection[curr_idx]
                 if strategy == 'rand':
                     rand_offspring_idx = np.random.randint(noffspring)
                     variator.mutate(custom_type, offspring_solutions[rand_offspring_idx], variable_index, **kwargs)
@@ -1330,6 +1357,9 @@ class LocalSequentialOperator(LocalVariator):
                 else:
                     variator.evolve(custom_type, parent_solutions, [offspring_solutions[i] for i in previously_altered], variable_index, copy_indices, **kwargs)
 
+            curr_idx = (curr_idx + 1) % nvariators
+            if curr_idx == start_idx:
+                break
 
 
 

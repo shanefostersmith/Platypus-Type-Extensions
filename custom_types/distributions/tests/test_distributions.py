@@ -1,6 +1,6 @@
 import pytest
 from custom_types.distributions.monotonic_distributions import *
-from tests.test_distributions.conftest import *
+from ...distributions.tests.conftest import *
 from pyomo.util.infeasible import find_infeasible_constraints
 
 class TestFixedMapMonotonic:

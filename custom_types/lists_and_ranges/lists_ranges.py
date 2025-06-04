@@ -519,7 +519,6 @@ class MultiPCX(LocalVariator):
         
         parent_to_row = np.arange(nparents, dtype=np.uint16)
         row_to_parent = np.arange(nparents, dtype=np.uint16)
-        print(f"n copy indices {len(copy_indices)}")
         unique_copies=  self.group_by_copy(copy_indices) # parent -> offspring copies of parent
         for parent_idx, offspring_indices in unique_copies.items():
             if parent_idx == -1:

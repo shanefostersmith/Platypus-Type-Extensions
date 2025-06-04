@@ -1,8 +1,11 @@
 import pytest
 import numpy as np
+import copy
+from typing import Literal
 from platypus import Problem, Solution
 from custom_types.core import CustomType, LocalVariator, LocalMutator
-import copy
+from custom_types.global_evolutions.basic_global_evolution import BasicGlobalEvolution
+
 
 @pytest.fixture(
     params=[1, 2, 5],
@@ -116,25 +119,59 @@ def create_one_var_solutions(custom_type: CustomType, nparents = 2, noffspring =
     """
     problem = unconstrainedProblem(custom_type)
     if issubclass(type(custom_type.local_variator), LocalMutator):
+        custom_type.do_mutation = True
         offspring_sol = Solution(problem)
         offspring_sol.variables[0] = custom_type.rand()
+        offspring_sol.evaluated = True
         return None, offspring_sol, [None]
     else:
+        custom_type.do_evolution = True
         parent_solutions = [Solution(problem) for _ in range(nparents)]
         copy_indices = [None for _ in range(noffspring)]
+        
         offspring_solutions = None
         for sol in parent_solutions:
             sol.variables[0] = custom_type.rand()
+            sol.evaluated = True
+            
         if not deepcopy:
             offspring_solutions = [Solution(problem) for _ in range(noffspring)]
             for sol in offspring_solutions:
                 sol.variables[0] = custom_type.rand()
+                sol.evaluated = True
         else:
             offspring_solutions = []
             for i in range(noffspring):
                 par_idx = min(nparents - 1, i)
                 copy_indices[i] = par_idx
-                offspring_solutions.append(copy.deepcopy(parent_solutions[par_idx]))
+                sol = copy.deepcopy(parent_solutions[par_idx])
+                offspring_solutions.append(sol)
                     
         return parent_solutions, offspring_solutions, copy_indices
+    
+def create_multi_var_solutions(
+    nsolutions = 2, 
+    *custom_types):
+    
+    problem = unconstrainedProblem(*custom_types)
+    out = []
+    for _ in range(nsolutions):
+        solution = Solution(problem)
+        for custom_type in custom_types:
+            solution.evaluated = True
+            for j in range(problem.nvars):
+                solution.variables[j] = custom_type.rand()
+            if issubclass(type(custom_type.local_variator), LocalMutator):
+                custom_type.do_mutation = True
+            else:
+                custom_type.do_evolution = True
+        out.append(solution)
+        
+    return out
 
+def create_basic_global_evolution(
+    arity, offspring, 
+    copy_method: int | Literal['sample', 'rand'] = 'rand'):
+    
+    return BasicGlobalEvolution(arity, offspring, copy_method)
+    

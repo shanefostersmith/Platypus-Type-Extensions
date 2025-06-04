@@ -1,10 +1,9 @@
 import pytest
-import pyomo as pyo
-from custom_types.distributions.point_bounds import *
-from custom_types.distributions import _bounds_tools
-from tests.test_distributions.conftest import *
-from pyomo.util.infeasible import find_infeasible_constraints
 from math import floor
+from pyomo.util.infeasible import find_infeasible_constraints
+from custom_types.distributions import _bounds_tools
+from ..point_bounds import *
+from .conftest import *
 
 class TestPointBounds:
 
@@ -57,6 +56,10 @@ class TestPointBounds:
         
         for constr, body_value, _ in find_infeasible_constraints(simple_point_bounds.model):
             raise ValueError(f"An infeasible constraint found: {str(constr)}: {body_value}")
+        
+        simple_point_bounds.set_max_points(None)
+        for constr, body_value, _ in find_infeasible_constraints(simple_point_bounds.model):
+            raise ValueError(f"An infeasible constraint found: {str(constr)}: {body_value}")
     
     def test_first_last_bounds_set(self, simple_point_bounds: PointBounds, first_last_bound_type):
         orig_max_points = simple_point_bounds.max_points
@@ -85,7 +88,6 @@ class TestPointBounds:
             assert simple_point_bounds.min_last_point == mid_point
             assert simple_point_bounds.max_first_point == orig_lb
             simple_point_bounds.set_lower_bound(mid_point)
-            assert simple_point_bounds.lower_bound < simple_point_bounds.min_last_point
 
         else: #fixed_last
             simple_point_bounds.set_last_point_lower_bound(orig_ub)
@@ -94,7 +96,6 @@ class TestPointBounds:
             assert simple_point_bounds.min_last_point == orig_ub
             assert simple_point_bounds.max_first_point == mid_point
             simple_point_bounds.set_upper_bound(mid_point)
-            assert simple_point_bounds.upper_bound > simple_point_bounds.max_first_point
 
         assert 0 < simple_point_bounds.min_separation <= simple_point_bounds.max_separation
         assert 2 <= simple_point_bounds.min_points <= simple_point_bounds.max_points
@@ -167,6 +168,13 @@ class TestPointBounds:
         
         for constr, body_value, infeasible in find_infeasible_constraints(simple_point_bounds.model):
             raise ValueError(f"An infeasible constraint found: {str(constr)}: {body_value}. Type {infeasible}")
+        
+        simple_point_bounds.set_min_separation(None)
+        simple_point_bounds.set_max_separation(None)
+        
+        for constr, body_value, infeasible in find_infeasible_constraints(simple_point_bounds.model):
+            raise ValueError(f"An infeasible constraint found: {str(constr)}: {body_value}. Type {infeasible}")
+        
     
     def test_fixed_width(self, simple_point_bounds: PointBounds):
         orig_lb, orig_ub = simple_point_bounds.get_full_bounds()

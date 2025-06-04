@@ -127,7 +127,7 @@ class PointBounds(BoundsViewMixin):
             
                 -  `min_separation` * `(max_points - 1)` >= `min_width` 
                 
-                -  `max_separation` * `(min_points - 1)` <= `max_width`  #TODO: should be other way around (min_points - 1) * max_separation >= min_width
+                -  `max_separation` * `(min_points - 1)` <= `max_width`
                 
                 -  `min_separation` <= `max_separation` and `min_points` <= `max_points`
 

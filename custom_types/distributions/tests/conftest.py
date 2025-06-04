@@ -2,7 +2,6 @@ import pytest
 import numpy as np
 import copy
 from typing import Literal
-from pyomo.environ import Objective
 from custom_types.distributions import point_bounds, real_bijection
 from custom_types.distributions.ex_bijection_funcs import half_life_bijection
 from custom_types.distributions.monotonic_distributions import *
@@ -296,13 +295,16 @@ def create_one_var_solutions(custom_type: CustomType, nparents = 2, noffspring =
     """
     problem = unconstrainedProblem(custom_type)
     if issubclass(type(custom_type.local_variator), LocalMutator):
+        custom_type.do_mutation = True
         offspring_sol = Solution(problem)
         offspring_sol.variables[0] = custom_type.rand()
         offspring_sol.evaluated = True
         return None, offspring_sol, [None]
     else:
+        custom_type.do_evolution = True
         parent_solutions = [Solution(problem) for _ in range(nparents)]
         copy_indices = [None for _ in range(noffspring)]
+        
         offspring_solutions = None
         for sol in parent_solutions:
             sol.variables[0] = custom_type.rand()
@@ -319,7 +321,7 @@ def create_one_var_solutions(custom_type: CustomType, nparents = 2, noffspring =
                 sol = copy.deepcopy(parent_solutions[par_idx])
                 sol.evaluated = True
                 offspring_solutions.append(sol)
-                    
+                     
         return parent_solutions, offspring_solutions, copy_indices
     
     
