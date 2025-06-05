@@ -1,7 +1,9 @@
 import numpy as np
-from numba import njit
+from numba import njit, vectorize, guvectorize, float32, float64, int64, types, prange
 from numbers import Integral
 from math import floor
+
+
 
 def clip(val, lower_bound, upper_bound):
     return max(lower_bound, min(val, upper_bound))
@@ -14,6 +16,9 @@ def group_by_copy(copy_indices) -> dict[int, list[int]]:
         else:
             unique_copies.setdefault(copy_idx, []).append(i)
     return unique_copies
+
+
+
 
 @njit
 def _min_max_norm_convert(min_val, max_val, curr_val, to_norm):
@@ -73,7 +78,7 @@ def bounds_to_nbits(lower_bound: Integral, upper_bound: Integral) -> int:
     return mag_bits + 1
 
 
-def vectorized_to_norm(ranges: np.ndarray, values: np.ndarray):
+def vectorized_to_norm(ranges: np.ndarray, values: np.ndarray, in_place = False):
     """Convert a 1D or 2D array of values to 0-1 range
     
     This function assumes there are no zero-width ranges
@@ -92,12 +97,17 @@ def vectorized_to_norm(ranges: np.ndarray, values: np.ndarray):
     """    
     mins = ranges[:, 0]
     denoms= ranges[:, 1] - mins 
-    normalized = np.empty_like(values, dtype=np.float64)
-    np.subtract(values, mins, out=normalized)
-    np.divide(normalized, denoms, out=normalized)
-    return normalized
+    if not in_place:
+        normalized = np.empty_like(values, dtype=np.float64)
+        np.subtract(values, mins, out=normalized)
+        np.divide(normalized, denoms, out=normalized)
+        return normalized
+    else:
+        np.subtract(values, mins, out=values)
+        np.divide(values, denoms, out=values)
+        return values
 
-def vectorized_from_norm(ranges: np.ndarray, values: np.ndarray, dtype: type):
+def vectorized_from_norm(ranges: np.ndarray, values: np.ndarray, dtype: type = None, in_place = False):
     """Convert a 1D or 2D array of values from 0-1 range to their original scale
     
     This function assumes there are no zero-width ranges
@@ -118,12 +128,123 @@ def vectorized_from_norm(ranges: np.ndarray, values: np.ndarray, dtype: type):
     """    
     mins = ranges[:, 0]
     diffs = ranges[:, 1] - mins 
-    original_scale = np.empty_like(values, dtype=dtype)
-    np.multiply(values, diffs, out=original_scale)
-    np.add(original_scale, mins, out=original_scale)
-    return original_scale
+    if not in_place:
+        dtype = dtype or np.float32
+        original_scale = np.empty_like(values, dtype=dtype)
+        np.multiply(values, diffs, out=original_scale)
+        np.add(original_scale, mins, out=original_scale)
+        return original_scale
+    else:
+        np.multiply(values, diffs, out=values)
+        np.add(values, mins, out=values)
+        return values
 
-# OTHER BIT CONVERSIONS (grey-encomding)
+
+gu_scale_2Dsig = [
+    (float32[:,:], float32[:,:], float32[:,:]), 
+    (float64[:,:], float64[:,:], float64[:,:]),
+    (float64[:,:], float32[:,:], float32[:,:]),
+    (float32[:,:], float64[:,:], float64[:,:]),
+    (float64[:,:], float64[:,:], float64[:,:])
+]
+gu_scale_1Dsig = [
+    (float32[:,:], float32[:], float32[:]), 
+    (float64[:,:], float64[:], float64[:]),
+    (float64[:,:], float32[:], float32[:]),
+    (float32[:,:], float64[:], float64[:]),
+    (float64[:,:], float64[:], float64[:])
+]
+gu_descale_2Dsig = [
+    (float32[:,:], float32[:,:]), 
+    (float64[:,:], float32[:,:]),
+    (float32[:,:], float64[:,:]),
+    (float64[:,:], float64[:,:])
+]
+gu_descale_1Dsig = [
+    (float32[:,:], float32[:]), 
+    (float64[:,:], float32[:]),
+    (float32[:,:], float64[:]),
+    (float64[:,:], float64[:])
+]
+
+@vectorize(
+    [float32(float32, float32, float32), 
+    float64(float64, float64, float64)], 
+    nopython = True, cache = True)
+def vector_normalize1D(lb, ub, value):
+    if lb == ub:
+        return 1
+    else:
+        return (value - lb) / (ub - lb)
+
+@vectorize(
+    [float32(float32, float32, float32), 
+    float64(float64, float64, float64)], 
+    nopython = True, cache = True)
+def vector_denormalize1D(lb, ub, value):
+    return value * (ub - lb) + lb
+
+@guvectorize(gu_scale_1Dsig, '(r,c),(r)->(r)', nopython = True, cache = True)
+def gu_normalize2D_1D(ranges, values, out): 
+    """Normalize an array of values.
+    It is assumed each element of 'values' 
+    has a minimum and maximum value given by the corresponding row in 'ranges'
+        - i.e each value `values[i]` has a lower bound `ranges[i,0]` and an upper bound `ranges[i,1]`
+        
+    Expects the shape of ranges `(r,2)` and shape of values `(r,)`"""
+    nrows = ranges.shape[0]
+    for r in range(nrows):
+        if ranges[r,0] == ranges[r,1]:
+            out[r] = 1
+        else:
+            out[r] = (values[r] - ranges[r,0]) / (ranges[r,1] - ranges[r,0])
+
+@guvectorize(gu_descale_1Dsig, '(r,c),(r)', 
+             nopython = True, cache = True,
+             writable_args = (1,))
+def gu_denormalize2D_1D(ranges, values): 
+    """*In-place* conversion of normalized values (in [0,1] range) to original scale
+    
+    Expects the shape of ranges `(r,2)` and shape of values `(r,)` (see gu_normalize2D_1D)"""
+    nrows = ranges.shape[0]
+    for r in range(nrows):
+        d = ranges[r,1] - ranges[r,0]
+        values[r] = (values[r] * d) + ranges[r,0]
+
+@guvectorize(gu_scale_2Dsig, '(r,c),(p,r)->(p,r)', nopython = True, cache = True)
+def gu_normalize2D_2D(ranges, values, out): 
+    """Normalize a matrix of values.
+    It is assumed each column of 'values' 
+    has a minimum and maximum value given by the corresponding row in 'ranges'
+        - i.e each value in column `i` has a lower bound `ranges[i,0]` and an upper bound `ranges[i,1]`
+        
+    Expects the shape of ranges `(r,2)` and shape of values `(p,r)`"""
+    nvars = ranges.shape[0]
+    nvectors = values.shape[0]
+    for v in range(nvars):
+        if ranges[v,0] == ranges[v,1]:
+            for r in range(nvectors):
+                out[r,v] = 1
+        else:
+            lb = ranges[v,0]
+            d = ranges[v,1] - lb
+            for r in range(nvectors):
+                out[r,v] = (values[r, v] - lb) / d
+            
+@guvectorize(gu_descale_2Dsig, '(r,c),(p,r)', 
+             nopython = True, cache = True,
+             writable_args = (1,))
+def gu_denormalize2D_2D(ranges, values):
+    """*In-place* conversion of normalized values (in [0,1] range) to original scale
+    
+    Expects the shape of ranges `(r,2)` and shape of values `(p,r)` (see gu_normalize2D_2D)"""
+    nvars = ranges.shape[0]
+    nvectors = values.shape[0]
+    for v in range(nvars):
+        lb = ranges[v,0]
+        d = ranges[v,1] - lb
+        for r in range(nvectors):
+            values[r, v] = (values[r,v] * d) + lb
 
 def int_to_gray_encoding(value: int, min_value: int, max_value: int, nbits: int | None = None) -> np.ndarray:
     """

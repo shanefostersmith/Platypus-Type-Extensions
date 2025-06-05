@@ -6,7 +6,6 @@ from platypus import Problem, Solution
 from custom_types.core import CustomType, LocalVariator, LocalMutator
 from custom_types.global_evolutions.basic_global_evolution import BasicGlobalEvolution
 
-
 @pytest.fixture(
     params=[1, 2, 5],
     ids=lambda v: f"noffspring={v}"
@@ -54,6 +53,32 @@ def nrows(request): # nparents
 @pytest.fixture(params=[1, 2, 5], ids=lambda n: f"ncols={n}")
 def ncols(request): # nvars
     return request.param 
+
+@pytest.fixture( params = [(5, 100.0), (100, 1e10), (int(1e4), 1e10), (int(1e5), 1e5), (int(2.5e5), 1.1)], ids = lambda v: f"ranges=vector_length: {v[0]}, max_number {v[1]}" )
+def ranges_type(request):
+    return request.param
+
+@pytest.fixture
+def np64_ranges(ranges_type) -> tuple[np.ndarray, np.ndarray]:
+    """Returns: ranges (2d), values {1d}"""
+    vector_length, max_val = ranges_type
+    matrix = np.zeros((vector_length, 2), dtype = np.float64)
+    rng = np.random.default_rng(0)
+    half_max = max_val / 2
+    matrix[:,1] = (half_max * rng.random(size = vector_length, dtype = np.float64)) + half_max
+    values = rng.random(size = vector_length, dtype = np.float64) * half_max
+    return matrix, values
+
+@pytest.fixture(params = [(5, 5), (10, 1000), (1000, 10), (int(2e4), 10), (10, int(2e4))], ids = lambda v: f"ranges=2d_range: parents: {v[0]}, vectors {v[1]}")
+def np64_2D_ranges(request) -> tuple[np.ndarray, np.ndarray]:
+    """Returns: ranges (2d), values {1d}"""
+    rows, vars = request.param
+    matrix = np.zeros((vars, 2), dtype = np.float64)
+    rng = np.random.default_rng(0)
+    half = 0.5 if rows > 5 else 50
+    matrix[:,1] = (half * rng.random(size = vars, dtype = np.float64)) + half
+    values = rng.random(size = (rows, vars), dtype = np.float64) * half
+    return matrix, values
 
 @pytest.fixture(params=[True,False],ids=lambda v: f"zero_reference={v}")
 def zero_reference(request):
@@ -151,9 +176,14 @@ def create_one_var_solutions(custom_type: CustomType, nparents = 2, noffspring =
     
 def create_multi_var_solutions(
     nsolutions = 2, 
+    problem = None,
     *custom_types):
     
-    problem = unconstrainedProblem(*custom_types)
+    if problem is None:
+        problem = unconstrainedProblem(*custom_types)
+    else:
+        custom_types = [problem.types[i] for i in problem.nvars]
+    
     out = []
     for _ in range(nsolutions):
         solution = Solution(problem)

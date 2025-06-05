@@ -10,11 +10,67 @@ from custom_types.lists_and_ranges.lists_ranges import (
     ArrayCrossover, MultiIntegerMutation,
     MultiPCX, MultiDifferentialEvolution, MultiRealPM,
     RealListPCX, StepMutation, RealListPM)
+
 from tests.conftest import (
-    create_basic_global_evolution, 
     create_multi_var_solutions, 
     create_one_var_solutions,
     unconstrainedProblem)
+
+def create_multi_real(local_variator):
+    input_ranges = np.vstack([np.array([-1, 1], np.float32), np.array([2, 5], np.float32), np.array([-4, 2], np.float32)])
+    if not isinstance(local_variator, LocalMutator):
+        return  MultiRealRange(input_ranges, local_variator=local_variator)
+    else:
+        return  MultiRealRange(input_ranges, local_mutator=local_variator)
+
+def create_multi_int(local_variator):
+    input_ranges = np.vstack(([0, 4], [-1, 5]))
+    if not isinstance(local_variator, LocalMutator):
+        return  MultiIntegerRange(input_ranges, local_variator=local_variator)
+    else:
+        return  MultiIntegerRange(input_ranges, local_mutator=local_variator)
+
+def _create_mixed_copy(custom_type, num_parents, num_offspring):
+    """Assumes 1 variable"""
+    copy_choices = [0, None, 1] if num_parents == 1 or num_parents % 2 == 0 else [None, 0, 1]
+    problem = unconstrainedProblem(custom_type)
+    
+    added_parents = 0
+    copy_choices_idx = 0
+    parent_solutions = []
+    offspring_solutions = []
+    copy_indices = []
+    for _ in range(num_offspring):
+        parent_idx = copy_choices[copy_choices_idx]
+        if parent_idx is not None:
+            if parent_idx == added_parents:
+                parent = Solution(problem)
+                parent.variables[0] = custom_type.rand()
+                parent.evaluated = True
+                parent_solutions.append(parent)
+                offspring_solutions.append(copy.deepcopy(parent))
+                added_parents += 1
+            elif parent_idx < added_parents:
+                offspring_solutions.append(copy.deepcopy(parent_solutions[parent_idx]))
+            else:
+                raise ValueError("error, added_parents should not be > parent_index ")
+        else:
+            offspring = Solution(problem)
+            offspring.variables[0] = custom_type.rand()
+            offspring.evaluated = True
+            offspring_solutions.append(offspring)
+            
+        copy_indices.append(parent_idx)
+        copy_choices_idx = (1 + copy_choices_idx) % 3
+    
+    if num_parents > added_parents:
+        for _ in range(num_parents - added_parents):
+            parent = Solution(problem)
+            parent.variables[0] = custom_type.rand()
+            parent.evaluated = True
+            parent_solutions.append(parent)
+    
+    return parent_solutions, offspring_solutions, copy_indices 
 
 SELECTION_STRATEGIES = ['previous', 'swap', 'rand']
 THREE_STRATEGIES = [p for p in permutations(SELECTION_STRATEGIES) if p[0] != 'swap']
@@ -98,48 +154,6 @@ def single_selection_multi_real(request, single_offspring_selection, randomize_f
         assert not sequential_variator._contains_crossover 
     return sequential_variator
     
-def _create_mixed_copy(custom_type, num_parents, num_offspring):
-    """Assumes 1 variable"""
-    copy_choices = [0, None, 1] if num_parents == 1 or num_parents % 2 == 0 else [None, 0, 1]
-    problem = unconstrainedProblem(custom_type)
-    
-    added_parents = 0
-    copy_choices_idx = 0
-    parent_solutions = []
-    offspring_solutions = []
-    copy_indices = []
-    for _ in range(num_offspring):
-        parent_idx = copy_choices[copy_choices_idx]
-        if parent_idx is not None:
-            if parent_idx == added_parents:
-                parent = Solution(problem)
-                parent.variables[0] = custom_type.rand()
-                parent.evaluated = True
-                parent_solutions.append(parent)
-                offspring_solutions.append(copy.deepcopy(parent))
-                added_parents += 1
-            elif parent_idx < added_parents:
-                offspring_solutions.append(copy.deepcopy(parent_solutions[parent_idx]))
-            else:
-                raise ValueError("error, added_parents should not be > parent_index ")
-        else:
-            offspring = Solution(problem)
-            offspring.variables[0] = custom_type.rand()
-            offspring.evaluated = True
-            offspring_solutions.append(offspring)
-            
-        copy_indices.append(parent_idx)
-        copy_choices_idx = (1 + copy_choices_idx) % 3
-    
-    if num_parents > added_parents:
-        for _ in range(num_parents - added_parents):
-            parent = Solution(problem)
-            parent.variables[0] = custom_type.rand()
-            parent.evaluated = True
-            parent_solutions.append(parent)
-    
-    return parent_solutions, offspring_solutions, copy_indices 
-
 @pytest.fixture
 def multi_selection_partition_solutions(multi_selection_set_partition: LocalSequentialOperator, deepcopy_type, nparents_and_noffspring):
     """Returns: parent_solutions, offspring_solution, copy_indices"""
@@ -149,7 +163,7 @@ def multi_selection_partition_solutions(multi_selection_set_partition: LocalSequ
     num_parents = nparents_and_noffspring[0]
     num_offspring = nparents_and_noffspring[1]
     if deepcopy_type is None:
-        all_solutions = create_multi_var_solutions(num_parents + num_offspring, set_partition)
+        all_solutions = create_multi_var_solutions(num_parents + num_offspring, None, set_partition)
         copy_indices = [None for _ in range(num_offspring)]
         return all_solutions[:num_parents], all_solutions[num_parents:], copy_indices
     if deepcopy_type == 'order':
@@ -166,7 +180,7 @@ def single_selection_real_solutions(single_selection_multi_real: LocalSequential
     num_parents = nparents_and_noffspring[0]
     num_offspring = nparents_and_noffspring[1]
     if deepcopy_type is None:
-        all_solutions = create_multi_var_solutions(num_parents + num_offspring, real_type)
+        all_solutions = create_multi_var_solutions(num_parents + num_offspring, None, real_type)
         copy_indices = [None for _ in range(num_offspring)]
         return all_solutions[:num_parents], all_solutions[num_parents:], copy_indices
     if deepcopy_type == 'order':
@@ -184,7 +198,7 @@ def single_selection_partition_solutions(single_selection_set_partition: LocalSe
     num_offspring = nparents_and_noffspring[1]
     
     if deepcopy_type is None:
-        all_solutions = create_multi_var_solutions(num_parents + num_offspring, set_partition)
+        all_solutions = create_multi_var_solutions(num_parents + num_offspring, None, set_partition)
         copy_indices = [None for _ in range(num_offspring)]
         return all_solutions[:num_parents], all_solutions[num_parents:], copy_indices
     
@@ -303,3 +317,4 @@ def compound_mutator_solutions(request, randomize_first_operator, noffspring):
         solutions.append(sol)
         
     return solutions
+

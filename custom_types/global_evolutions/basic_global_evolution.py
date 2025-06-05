@@ -36,23 +36,22 @@ class BasicGlobalEvolution(GlobalEvolution):
         if self.global_dampener <= 0:
             raise ValueError("The global dampener value cannot be <= 0")
         self.copy_method = copy_method
-        if isinstance(copy_method, int) and copy_method >= nparents:
-            raise ValueError("The 'copy_method' integer is >= nparents")
+        if isinstance(copy_method, int):
+            if copy_method >= nparents:
+                raise ValueError("The 'copy_method' integer is >= nparents")
         elif not isinstance(copy_method, str) or not copy_method in ('rand', 'sample'):
-            raise ValueError(f"Invalid 'copy_method' {copy_method}")
+            raise ValueError(f"Invalid 'copy_method' {copy_method} of type {type(copy_method)}")
         super().__init__(nparents, noffspring)
 
     def evolve(self, parents: list[Solution]):
+        assert isinstance(parents, list)
         copy_indices = None
         if isinstance(self.copy_method, int):
             copy_indices = [self.copy_method for _ in range(self.noffspring)]
         elif self.copy_method == 'sample' and self.arity >= self.noffspring:
-            if self.arity == self.noffspring:
-                copy_indices = [range(self.arity)]
-            else:
-                copy_indices = list(random.choice(self.arity, size = self.noffspring, replace = False))
+            copy_indices = list(range(self.arity)) if self.arity == self.noffspring else random.choice(self.arity, size = self.noffspring, replace = False).tolist()
         else:
-            copy_indices = list(random.choice(self.arity, size = self.noffspring))
+            copy_indices = random.choice(self.arity, size = self.noffspring).tolist()
             
         offspring = self.get_parent_deepcopies(parents, copy_indices)
         for custom_type, variable_index in self.generate_types_to_evolve(offspring[0].problem):

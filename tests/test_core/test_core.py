@@ -3,7 +3,7 @@ from custom_types.core import *
 from tests.test_core.conftest import *
 from tests.conftest import deepcopy_parents, create_multi_var_solutions, create_one_var_solutions
 from custom_types.global_evolutions.basic_global_evolution import BasicGlobalEvolution
-
+from custom_types.utils import vectorized_to_norm, gufunc_normalize1d
 
 def test_sequential_operator_single(single_selection_partition_solutions, request):
     """Tests LocalSequentialOperator with SetPartition. Uses 3-4 variators, 1 is a LocalMutator """
@@ -167,6 +167,6 @@ def test_type_tuple(variators):
 
         with pytest.raises(TypeError):
             ArrayCrossover.register_type((SetPartition, SteppedRange))
-    
-    
+
+
     

@@ -34,35 +34,39 @@ ortho_invalid_sig = ortho_ret_type(
     boolean[:]
 )
 
-# @guvectorize(
-#     [(float32[:], float32[:], float32[:], types.uint32[:])], 
-#     '(n),(n)->(n),()',
-#     nopython = True)
+@guvectorize(
+    [(float32[:], float32[:], float32[:], types.uint32[:])], 
+    '(n),(n)->(n),()',
+    nopython = True)
 def _vectorized_subtract(u, v, out, out_nzero):
     """
     Element wise `out[i]` = `u[i]` - `v[i]`
-    Takes a 1D 'out_nzero' array which count nzeros
+    and counts the number of `abs(u[i]` - `v[i]`) < eps
+    
+    gu_vectorized: only need `u` and `v` when signature active
     """    
     k = len(u)
-    # assert(k == len(v))
-    # print(f"k: {k}, out {len(out)}")
     EPS = np.finfo(np.float32).tiny
+    nzero = 0
     for i in range(k):
         z_i = u[i] - v[i]
         if abs(z_i) < EPS:
-            out_nzero[0] += 1
-            continue
+            nzero += 1
+            
         out[i] = z_i
+    out_nzero[0] = nzero
 
-
-# @guvectorize(
-#     [(float32[:,:], float32[:])], 
-#     '(p,n)->(n)',
-#     nopython = True)
+@guvectorize(
+    [(float32[:,:], float32[:])], 
+    '(p,n)->(n)',
+    nopython = True)
 def _find_g(
     parent_vars: np.ndarray,
-    out: np.ndarray):
-    """takes a nparent by nvars 2D array, updates outarray (expects length n)"""
+    out):
+    """Takes parent variables (2D array 1 row of variables per parent), 
+    
+    Finds the mean value of each variable. 
+    gu_vectorized = only parents_vars required"""
     
     k = parent_vars.shape[0]
     n = parent_vars.shape[1]
@@ -97,10 +101,10 @@ def _invalid_e0_orthogonalize(
     num_non_zero = np.uint8(0)
     first_valid_idx = 0
     for i in range(k-1):
-        d = np.zeros(n , np.float32)
-        d_all_zero = np.zeros(1 , np.uint32)
-        _vectorized_subtract(parent_vars[i], g, d, d_all_zero)
-        if d_all_zero[0] == n:
+        # d = np.zeros(n , np.float32)
+        # d_all_zero = np.zeros(1 , np.uint32)
+        d, d_nzero = _vectorized_subtract(parent_vars[i], g)
+        if d_nzero == n:
             is_all_zero[i] = True
             continue
         
@@ -172,24 +176,25 @@ def _valid_e0_orthogonalize(
     Returns: (updated basis vectors, if basis vectors are non-zero, D, num_non_zero vectors)
     """    
     
-    EPS = np.finfo(np.float64).tiny
+    EPS = np.finfo(np.float32).tiny
     
     # construct matrix for all basis vectors
     D = np.float32(0)
     num_non_zero = np.uint8(0)
     e0 = np.ascontiguousarray(e0)
     for i in range(nparent-1):
-        d = np.ascontiguousarray(np.zeros(n , np.float32))
-        d_all_zero = np.zeros(1 , np.uint32)
-        _vectorized_subtract(parent_vars[i], g, d, d_all_zero)
-        if d_all_zero[0] == n:
+        # d = np.ascontiguousarray(np.zeros(n , np.float32))
+        # d_all_zero = np.zeros(1 , np.uint32)
+        d, d_nzero = _vectorized_subtract(parent_vars[i], g)
+        if d_nzero == n:
             is_all_zero[i] = True
             continue
-    
+        
         e_sum = 0.0
         temp_new_d = np.zeros(n, np.float32)
         dot_d_first = np.dot(d, e0)
         quotient_first = dot_d_first / dot_reference
+        print(f"dot_d_first {dot_d_first }, dot_d_referece {dot_reference}")
         
         # A valid previous basis has not been found yet
         if num_non_zero == 0: 
@@ -408,15 +413,15 @@ def normalized_2d_pcx(
         return output
     
     # mean of each var
-    g = np.empty(nvars, np.float32)
-    _find_g(parent_vars, g)
+    # g = np.empty(nvars, np.float32)
+    g = _find_g(parent_vars)
     if noffspring == 1 or not randomize:
         if randomize:
             rand_parent = np.random.randint(nparents)
             parent_vars[[rand_parent, -1]] = parent_vars[[-1, rand_parent]]
-        e0 = np.zeros(nvars, np.float32, order = 'C')
-        temp_out = np.zeros(1, np.uint32)
-        _vectorized_subtract(parent_vars[-1], g, e0, temp_out)
+        # e0 = np.zeros(nvars, np.float32, order = 'C')
+        # temp_out = np.zeros(1, np.uint32)
+        e0, _ = _vectorized_subtract(parent_vars[-1], g)
         e_eta = np.zeros((nparents-1, nvars), np.float32)
         return _orthogonalize_pcx(parent_vars, noffspring, nparents, nvars, g, e0, e_eta, eta, zeta)
     
@@ -430,10 +435,9 @@ def normalized_2d_pcx(
     for parent_idx, count in count_dict.items():
         # print(f"count = {count}, parent_idx = {parent_idx}, curr_row = {curr_row}")
         parent_vars[[parent_idx, -1]] = parent_vars[[-1, parent_idx]]
-        e0 = np.zeros(nvars, np.float32, order = 'C')
-        temp_out = np.zeros(1, np.uint32)
-        _vectorized_subtract(parent_vars[-1], g, e0, temp_out)
-        
+        # e0 = np.zeros(nvars, np.float32, order = 'C')
+        # temp_out = np.zeros(1, np.uint32)
+        e0, _=  _vectorized_subtract(parent_vars[-1], g)
         e_eta = np.zeros((nparents-1,nvars), np.float32, order = 'C')
         config_offspring = _orthogonalize_pcx(parent_vars, count, nparents, nvars, g, e0, e_eta, eta, zeta)
         output[curr_row:curr_row+count, :] = config_offspring

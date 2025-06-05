@@ -4,11 +4,10 @@ import contextvars
 from warnings import warn
 from abc import ABCMeta, abstractmethod
 from collections.abc import Iterable
-from typing import Any, Type, Literal, Union
+from typing import Any, Type, Literal, Union, Generator
 from types import MethodType
 from platypus import Solution, Problem, Variator
 from platypus.types import Type as PlatypusType
-from typing import  Any, Generator, Literal
 from copy import deepcopy
 from functools import lru_cache, reduce, wraps
 from enum import Enum
@@ -82,27 +81,36 @@ class CustomType(PlatypusType):
         
         # check local variators
         self.local_variator = local_variator
+        # print(f"LOCAL VARIATOR: {local_variator!r}")
+        self._mut = None
         self.do_evolution = None
         self.do_mutation = None
-        self._mut = None
         if local_variator is not None and local_mutator is not None:
+            # print("here both")
             self.local_variator = LocalGAOperator(local_variator, local_mutator)
             self.do_evolution = True
             self.do_mutation = True
         elif local_variator is None and local_mutator is None:
+            # print("here none")
             self.do_evolution = False
             self.do_mutation = False
         elif local_variator is None and local_mutator is not None:
+            # print("here mutate")
             self.local_variator = local_mutator
             self.do_mutation = True
             self.do_evolution = False
         elif isinstance(local_variator, LocalGAOperator):
+            # print("here gao")
             self.do_evolution = True
             self.do_mutation = True
         elif isinstance(local_variator, LocalSequentialOperator):
+            # print("here sequantial")
             self.do_mutation = local_variator._contains_mutation
             self.do_evolution = local_variator._contains_crossover 
-        
+        elif isinstance(local_variator, LocalVariator):
+            self.do_evolution = True
+            self.do_mutation = False
+            
         # print(f"sp_types: {type(self.local_variator)._supported_types}")
         if self.local_variator is not None and not type(self) in self.local_variator._supported_types:
             raise ValueError(f"The CustomType {type(self).__name__} is not a valid type for the input LocalVariator {local_variator!r}. If not a compound/sequential operator, consider registering type")
@@ -159,16 +167,20 @@ class CustomType(PlatypusType):
             return self.do_mutation
         if isinstance(self.local_variator, LocalSequentialOperator):
             return (self.local_variator._contains_crossover and self.do_evolution) or (self.local_variator._contains_mutation and self.do_mutation)
-        if not isinstance(self.local_variator, LocalGAOperator):
-            return self.do_evolution
-        else:
-            return True
+        if isinstance(self.local_variator, LocalGAOperator):
+            return self.do_evolution or self.do_mutation
+        return self.do_evolution
+        
+        return True
     
     def __setattr__(self, name, value):
         super().__setattr__(name, value)
         if name in ('do_mutation', 'do_evolution'):
-            if hasattr(self, "do_mutation") and hasattr(self, "do_evolution"):
+            if hasattr(self, 'do_mutation') and hasattr(self, 'do_evolution'):
+                # print(f"here check {type(self.local_variator)}")
+                # print(f"Before {self._mut}, do_evolve / mutate: {self.do_evolution}, {self.do_mutation}")
                 self._mut = self._can_evolve()
+                # print(f"After {self._mut} \n")
 
 def _single_memo_encode(self: CustomType, decoded):
     encoded = self._mem_encode(decoded)
@@ -559,11 +571,12 @@ class GlobalEvolution(Variator):
         """
 
         out = None
-        if isinstance(parent_indices, int):
-            out =[deepcopy(parents[parent_indices])]
+        if isinstance(copy_indices, int):
+            out =[deepcopy(parents[copy_indices])]
         else:
-            if parent_indices == 'all':
-                parent_indices = range(len(parents))
+            if copy_indices == 'all':
+                copy_indices = range(len(parents))
+            # print(f"copy_indices: {copy_indices}")
             out = [deepcopy(parents[i]) for i in copy_indices]
         
         return out
@@ -586,13 +599,15 @@ class GlobalEvolution(Variator):
         """  
         problem_types = problem.types
         for i, var_type in enumerate(problem_types):
-            if (isinstance(var_type, CustomType) and var_type.can_evolve) or (not isinstance(var_type, CustomType) and self._ignore_generics):
+            # can_evolve = (isinstance(var_type, CustomType) and var_type.can_evolve) or (not isinstance(var_type, CustomType) and not self._ignore_generics)
+            # print(f"can {type(var_type)} evolve? {can_evolve}")
+            if (isinstance(var_type, CustomType) and var_type.can_evolve) or (not isinstance(var_type, CustomType) and not self._ignore_generics):
                 yield var_type, i
     
     def generate_type_groups(self, problem: Problem) -> Generator[tuple[list[CustomType | PlatypusType], tuple[int]]]:
         self._store_problem_types(problem)
         problem_types = problem.types
-        for type, indices in self._indices_by_type:
+        for indices in self._indices_by_type:
             yield [problem_types[i] for i in indices], indices 
     
     def _store_problem_types(self, problem: Problem):
@@ -910,12 +925,10 @@ class LocalSequentialOperator(LocalVariator):
             self.mutation_selection = mutation_selection
             self.contains_swap = nvariators
         
-    
     def __repr__(self):
         variators = ", ".join(type(var).__name__ for var in self.variators)
         return f"{self.__class__.__name__}(variators = ({variators}), types = {str(self._supported_types)}, min_arity = {self._supported_arity[0]}, min_noffspring = {self._supported_noffspring[0]}"
                 
-     
     def evolve(self, custom_type: CustomType | PlatypusType, parent_solutions, offspring_solutions, variable_index, copy_indices, **kwargs):
         if not type(custom_type) in self._supported_types:
             return 
@@ -981,7 +994,6 @@ class LocalSequentialOperator(LocalVariator):
                     break
         
         if idx == start_idx:
-            print("here return")
             return
         
         # rest of variators
@@ -1017,7 +1029,7 @@ class LocalSequentialOperator(LocalVariator):
             copied_from = copy_indices[i]
             if copied_from is not None:
                 original_parents.discard(copied_from)
-        print(f"START_IDX: {start_idx}, First altered: {previously_altered}, Original Parents {original_parents}")
+        # print(f"START_IDX: {start_idx}, First altered: {previously_altered}, Original Parents {original_parents}")
         
         multi_strategy = isinstance(self.offspring_selection, list)
         nvariators = len(self.variators)
@@ -1027,8 +1039,7 @@ class LocalSequentialOperator(LocalVariator):
             # Mutation
             if isinstance(curr_variator, LocalMutator) and do_mutation: 
                 curr_strategy = self.mutation_selection or self.offspring_selection[curr_idx]
-                print(f"CURR IDX: {curr_idx}, MUT_STRATEGY: {curr_strategy}")
-                print(f'unaltered_before: {unaltered_offspring}')
+                # print(f"CURR IDX: {curr_idx}, MUT_STRATEGY: {curr_strategy}")
                 
                 if curr_strategy == 'all':
                     curr_variator.evolve(custom_type, parent_solutions, offspring_solutions, variable_index, copy_indices, **kwargs)
@@ -1055,8 +1066,6 @@ class LocalSequentialOperator(LocalVariator):
                         unaltered_offspring.discard(rand_offspring_idx)
                     previously_altered = {rand_offspring_idx}
 
-                print(f"unaltered after: {unaltered_offspring}\n")
-            
             # Crossover       
             elif not isinstance(curr_variator, LocalMutator): 
                 curr_strategy = self.offspring_selection if not multi_strategy else self.offspring_selection[curr_idx]
@@ -1068,8 +1077,8 @@ class LocalSequentialOperator(LocalVariator):
                 
                 # Select parents from 'altered offspring' and uncopied/unused 'parent_solutions', 
                 # Select offspring from both altered and unaltered offspring
-                print(f"CURR IDX: {curr_idx}, STRATEGY: {curr_strategy}, VARIATOR {curr_variator.__class__.__name__}")
-                print(f'unaltered_before: {unaltered_offspring}, original_parents_before {original_parents}')
+                # print(f"CURR IDX: {curr_idx}, STRATEGY: {curr_strategy}, VARIATOR {curr_variator.__class__.__name__}")
+                # print(f'unaltered_before: {unaltered_offspring}, original_parents_before {original_parents}')
                 if curr_strategy == 'rand':
                     new_parent_choices, original_parent_choices, altered_offspring_choices, unaltered_offspring_choices = tools._rand_selection(
                         orig_offspring_indices, original_parents, unaltered_offspring, 
@@ -1090,16 +1099,14 @@ class LocalSequentialOperator(LocalVariator):
                         min_arity, max_arity, min_noffspring, max_noffspring
                     )
                     
-                print(f"new_parent_choices: {new_parent_choices}, original_parent_choices {original_parent_choices}")
-                print(f"altered_offspring_choices: {altered_offspring_choices}, unaltered_offspring_choices {unaltered_offspring_choices}")
-                
-                n_altered_choices = len(altered_offspring_choices)
-                if len(altered_offspring_choices) > 0:
-                    assert n_altered_choices == len(np.unique(altered_offspring_choices))
-                if len(unaltered_offspring_choices) > 0:
-                    assert len(unaltered_offspring_choices) == len(np.unique(unaltered_offspring_choices))
-                                                              
-                                                              
+                # print(f"new_parent_choices: {new_parent_choices}, original_parent_choices {original_parent_choices}")
+                # print(f"altered_offspring_choices: {altered_offspring_choices}, unaltered_offspring_choices {unaltered_offspring_choices}")
+                # n_altered_choices = len(altered_offspring_choices)
+                # if len(altered_offspring_choices) > 0:
+                #     assert n_altered_choices == len(np.unique(altered_offspring_choices))
+                # if len(unaltered_offspring_choices) > 0:
+                #     assert len(unaltered_offspring_choices) == len(np.unique(unaltered_offspring_choices))
+                                                                                                        
                 # Create new list of parent/offspring solutions, get new copy_indices
                 new_offspring, new_copy_indices, post_replacements = tools._copy_indices_and_deepcopy(
                     offspring_solutions, variable_index, new_parent_choices, altered_offspring_choices
@@ -1123,14 +1130,10 @@ class LocalSequentialOperator(LocalVariator):
                     new_parents.extend(parent_solutions[i] for i in original_parent_choices)
                 new_offspring.extend(offspring_solutions[i] for i in unaltered_offspring_choices)
                 
-                # n_altered_choices = len(altered_offspring_choices)
-                # if n_altered_choices > 0:
-                #     print(f"ALTERED BEFORE: {[offspring_solutions[i].variables[variable_index] for i in altered_offspring_choices]}")
-                
-                print(f"NUM PARENTS: {len(new_parents)}")
-                print(f"NUM OFFSPRING: {len(new_offspring)}")
-                print(f"COPY_INDICES: {new_copy_indices}, (original {copy_indices})")
-                print(f"POST_REPLACEMENTS: {post_replacements}")
+                # print(f"NUM PARENTS: {len(new_parents)}")
+                # print(f"NUM OFFSPRING: {len(new_offspring)}")
+                # print(f"COPY_INDICES: {new_copy_indices}, (original {copy_indices})")
+                # print(f"POST_REPLACEMENTS: {post_replacements}")
                 assert len(new_offspring) == len(new_copy_indices), f"new_copy_indices: {new_copy_indices}, post_replacements {post_replacements}"
                 assert all(idx is None or idx < len(new_parents) for idx in new_copy_indices)
                  
@@ -1147,16 +1150,13 @@ class LocalSequentialOperator(LocalVariator):
                 #         assert np.all(var == new_parents[t].variables[variable_index])
         
                 tools._variable_replacement(offspring_solutions, new_offspring, post_replacements, variable_index)
-                # if n_altered_choices > 0:
-                #     print(f"OFFSPRING_AFTER_2: {[offspring_solutions[i].variables[variable_index] for i in altered_offspring_choices]}")
- 
                 if unaltered_offspring_choices:
                     unaltered_offspring.difference_update(unaltered_offspring_choices)
                     orig_offspring_indices.extend(unaltered_offspring_choices)
                     altered_offspring.update(unaltered_offspring_choices)
                     num_altered += len(unaltered_offspring_choices)
                 previously_altered = set(altered_offspring_choices + unaltered_offspring_choices)
-                print(f'unaltered_after: {unaltered_offspring}, original_parents_after {original_parents}\n')
+                # print(f'unaltered_after: {unaltered_offspring}, original_parents_after {original_parents}\n')
             curr_idx = (curr_idx + 1) % nvariators
             
   
@@ -1198,8 +1198,6 @@ class LocalSequentialOperator(LocalVariator):
             out_nparents = min_arity if out_noffspring - 1 <= min_arity else max(min_arity, min(max_arity, out_noffspring + arity_difference))
         else: 
             out_nparents = max(min_arity, min(max_arity, out_noffspring + arity_difference))
-        
-        print(f"FIRST: OUT_nparents {out_nparents}, OUT_noffspring: {out_noffspring}")
         
         # Trivial nparents vs. noffspring
         if out_nparents == nparents and out_noffspring == noffspring:
