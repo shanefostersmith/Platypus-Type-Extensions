@@ -1,8 +1,7 @@
 import numpy as np
-from numba import njit, vectorize, guvectorize, float32, float64, int64, types, prange
+from numba import njit, vectorize, guvectorize, float32, float64, boolean, prange
 from numbers import Integral
 from math import floor
-
 
 
 def clip(val, lower_bound, upper_bound):
@@ -17,10 +16,12 @@ def group_by_copy(copy_indices) -> dict[int, list[int]]:
             unique_copies.setdefault(copy_idx, []).append(i)
     return unique_copies
 
-
-
-
-@njit
+@njit([
+    float32(float32, float32, float32, boolean),
+    float32(float64, float64, float32, boolean),
+    float64(float32, float32, float64, boolean),
+    float64(float64, float64, float64, boolean),
+])
 def _min_max_norm_convert(min_val, max_val, curr_val, to_norm):
     if to_norm:
         return 1.0 if max_val == min_val else (curr_val - min_val) / (max_val - min_val)

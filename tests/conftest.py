@@ -58,6 +58,21 @@ def ncols(request): # nvars
 def ranges_type(request):
     return request.param
 
+@pytest.fixture(
+    params = [(5, 100.0), (1000, 1.0e4), (int(1e4), 1.0e10), (int(5e4), 5.0), (int(2e5), 5.0)], ids = lambda v: f"ranges=vector_length: {v[0]}, max_number {v[1]}" #, (int(1e5), 1e5)
+)
+def np32_ranges_DE(request):
+    vector_length, max_val = request.param
+    matrix = np.zeros((vector_length, 2), dtype = np.float32)
+    rng = np.random.default_rng(0)
+    half_max = max_val / 2
+    matrix[:,1] = (half_max * rng.random(size = vector_length, dtype = np.float32)) + half_max
+    orig = np.full(vector_length, half_max / 2, dtype = np.float32)
+    p1 = np.full(vector_length, half_max / 3, dtype = np.float32)
+    p2 = np.full(vector_length, half_max / 4, dtype = np.float32)
+    p3 = np.full(vector_length, half_max / 2.5, dtype = np.float32)
+    return matrix, orig, p1, p2, p3
+
 @pytest.fixture
 def np64_ranges(ranges_type) -> tuple[np.ndarray, np.ndarray]:
     """Returns: ranges (2d), values {1d}"""

@@ -101,8 +101,6 @@ def _invalid_e0_orthogonalize(
     num_non_zero = np.uint8(0)
     first_valid_idx = 0
     for i in range(k-1):
-        # d = np.zeros(n , np.float32)
-        # d_all_zero = np.zeros(1 , np.uint32)
         d, d_nzero = _vectorized_subtract(parent_vars[i], g)
         if d_nzero == n:
             is_all_zero[i] = True
@@ -183,8 +181,6 @@ def _valid_e0_orthogonalize(
     num_non_zero = np.uint8(0)
     e0 = np.ascontiguousarray(e0)
     for i in range(nparent-1):
-        # d = np.ascontiguousarray(np.zeros(n , np.float32))
-        # d_all_zero = np.zeros(1 , np.uint32)
         d, d_nzero = _vectorized_subtract(parent_vars[i], g)
         if d_nzero == n:
             is_all_zero[i] = True
@@ -194,7 +190,7 @@ def _valid_e0_orthogonalize(
         temp_new_d = np.zeros(n, np.float32)
         dot_d_first = np.dot(d, e0)
         quotient_first = dot_d_first / dot_reference
-        print(f"dot_d_first {dot_d_first }, dot_d_referece {dot_reference}")
+        # print(f"dot_d_first {dot_d_first }, dot_d_referece {dot_reference}")
         
         # A valid previous basis has not been found yet
         if num_non_zero == 0: 

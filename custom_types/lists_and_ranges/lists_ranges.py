@@ -4,7 +4,7 @@ from ._tools import _stepped_range_mutation, _type_equals, find_closest_val
 from bisect import bisect_left, bisect_right
 from ..core import CustomType, LocalMutator, LocalVariator, LocalGAOperator
 from ..utils import (_min_max_norm_convert, _nbits_encode, int_to_gray_encoding, gray_encoding_to_int,
-                     vectorized_to_norm, vectorized_from_norm, gufunc_normalize1d)
+                     vectorized_to_norm, vectorized_from_norm, gu_normalize2D_1D)
 from ..integer_methods.integer_methods import multi_int_crossover, int_cross_over, int_mutation, _cut_points
 from ..real_methods.numba_differential import real_mutation, differential_evolve
 from ..real_methods.numba_pcx import normalized_2d_pcx, normalized_1d_pcx
@@ -514,13 +514,8 @@ class MultiPCX(LocalVariator):
         nreals = custom_type.ranges.shape[0]
         norm_parent_reals = np.empty((nparents, nreals), np.float32, order='C')
         for i, par in enumerate(parent_solutions):
-            # norm1 = gufunc_normalize1d(custom_type.ranges, par.variables[variable_index])
-            # norm2 = vectorized_to_norm(custom_type.ranges, par.variables[variable_index])
-            # print(f"n1 {norm1} \n n2 {norm2}")
-            # assert np.all(np.isclose(norm1, norm2, 1e-7, 1e-8)), f"n1  {norm1} \n n2 {norm2}"
-            
             # norm_parent_reals[i] = vectorized_to_norm(custom_type.ranges, par.variables[variable_index])
-            norm_parent_reals[i] = gufunc_normalize1d(custom_type.ranges, par.variables[variable_index])
+            norm_parent_reals[i] = gu_normalize2D_1D(custom_type.ranges, par.variables[variable_index])
         
         unique_copies=  self.group_by_copy(copy_indices) # parent -> offspring copies of parent
         parent_to_row = np.arange(nparents, dtype=np.uint16)
@@ -534,22 +529,6 @@ class MultiPCX(LocalVariator):
             parent_to_row[parent_idx] = nparents -1
             parent_to_row[parent_at_last_row] = new_reference_row
             parent_at_last_row = parent_idx
-            assert len(np.unique(parent_to_row)) == nparents
-            
-            # Swap parent copy to "reference" row
-            # new_reference_row = parent_to_row[parent_idx]
-            # norm_parent_reals[[new_reference_row, -1]] = norm_parent_reals[[-1, new_reference_row]]
-            # p_i, prev_parent = row_to_parent[new_reference_row], row_to_parent[-1]
-            # assert(p_i == parent_idx)
-            # row_to_parent[new_reference_row], row_to_parent[-1] = prev_parent, parent_idx
-            # parent_to_row[parent_idx], parent_to_row[prev_parent] = nparents - 1, new_reference_row
-            
-            # # swap new reference parent to last row
-            # new_reference_row = parent_to_row[parent_idx]
-            # norm_parent_reals[[new_reference_row, -1]] = norm_parent_reals[[-1, new_reference_row]]
-            # parent_to_row[parent_idx] = nparents -1
-            # parent_to_row[parent_at_last_row] = new_reference_row
-            # parent_at_last_row = parent_idx
             # assert len(np.unique(parent_to_row)) == nparents
             
             offspring_values = vectorized_from_norm( # Evolve all offspring that were copied from parent_idx
@@ -721,7 +700,7 @@ class RealListPCX(LocalVariator):
             parent_to_row[parent_idx] = nparents -1
             parent_to_row[parent_at_last_row] = new_reference_row
             parent_at_last_row = parent_idx
-            assert len(np.unique(parent_to_row)) == nparents
+            # assert len(np.unique(parent_to_row)) == nparents
             
             new_values = normalized_1d_pcx(norm_parent_reals, np.uint8(len(offspring_indices)), eta, zeta, randomize=False)
             for i, offspring_idx in enumerate(offspring_indices):
@@ -730,8 +709,7 @@ class RealListPCX(LocalVariator):
                 if true_val != curr_offspring.variables[variable_index]:
                     curr_offspring.variables[variable_index] = true_val
                     curr_offspring.evaluated = False
-        
-        print("DONE\n")
+                    
         unlabeled_offspring = unique_copies.get(-1)
         if unlabeled_offspring: # Not copied from any solutions in parents_solutions
             temp = None
