@@ -404,3 +404,4 @@ def _gray_to_int(min_value, max_value, gray_encoding):
 #     v = (v & 0x33333333) + ((v >> 2) & 0x33333333)
 #     c = np.uint32((v + (v >> 4) & 0xF0F0F0F) * 0x1010101) >> 24
 #     return c
+

@@ -1,6 +1,10 @@
+
 import numpy as np
-from numba import njit, vectorize, guvectorize, types, float32, boolean
+from numba import njit, vectorize, guvectorize, types, prange, uint32, float32, float64, boolean
 from numba import types
+from sys import float_info
+from math import ceil
+import warnings
 
 """
 Two methods for PCX using static typing:
@@ -8,34 +12,53 @@ Two methods for PCX using static typing:
     - normalized_2d_pcx() -> multi-variable case (i.e. usual case)
 
 """
+EPSILON = float_info.epsilon
 ortho_ret_type = types.Tuple((
     float32[:, :], 
-    boolean[:], 
     float32, 
-    types.uint8
+    uint32
+))
+
+cgs_ret_type = types.Tuple((
+    float32[:, :], 
+    float32, 
+    uint32
 ))
 
 ortho_valid_sig = ortho_ret_type(
     float32[:, :], 
-    types.uint8, 
-    types.uint32, 
+    uint32, 
+    uint32, 
     float32[:], 
     float32[:], 
     float32[:, :], 
-    boolean[:], 
-    float32
 )
 ortho_invalid_sig = ortho_ret_type(
     float32[:, :], 
-    types.uint8, 
-    types.uint32,
+    uint32, 
+    uint32,
     float32[:], 
     float32[:, :], 
-    boolean[:]
+)
+batch_sig = cgs_ret_type(
+    float32[:, :], 
+    uint32, 
+    uint32,
+    float32[:],
+    float32[:],
+    float32[:,:],
+)
+
+cgs_sig = cgs_ret_type(
+    float32[:, :], 
+    uint32, 
+    uint32,
+    float32[:]
 )
 
 @guvectorize(
-    [(float32[:], float32[:], float32[:], types.uint32[:])], 
+    [(float32[:], float32[:], float32[:], uint32[:]),
+     (float64[:], float64[:], float64[:], uint32[:])], 
     '(n),(n)->(n),()',
     nopython = True)
 def _vectorized_subtract(u, v, out, out_nzero):
@@ -46,18 +69,18 @@ def _vectorized_subtract(u, v, out, out_nzero):
     gu_vectorized: only need `u` and `v` when signature active
     """    
     k = len(u)
-    EPS = np.finfo(np.float32).tiny
+    # EPS = np.finfo(u.dtype).eps
     nzero = 0
     for i in range(k):
         z_i = u[i] - v[i]
-        if abs(z_i) < EPS:
+        if abs(z_i) < EPSILON:
             nzero += 1
-            
         out[i] = z_i
     out_nzero[0] = nzero
 
 @guvectorize(
-    [(float32[:,:], float32[:])], 
+    [(float32[:,:], float32[:]),
+     (float64[:,:], float64[:])], 
     '(p,n)->(n)',
     nopython = True)
 def _find_g(
@@ -76,96 +99,166 @@ def _find_g(
         for parent_idx in range(k):
             g_var += parent_vars[parent_idx,var]
         out[var] = g_var / flt_k
-        
-# @njit(ortho_invalid_sig)
-def _invalid_e0_orthogonalize(
+
+@njit(
+    [types.Tuple((float32, uint32))(float32[:], uint32, float64), 
+    types.Tuple((float64, uint32))(float64[:], uint32, float64)], 
+    parallel = True, cache = True
+)
+def _sum_and_count(new_basis, nvars, eps):
+    e_sum = 0.0
+    count = 0
+    # EPS = np.finfo(np.float32).eps
+    for j in prange(nvars):
+        b = new_basis[j]
+        if b < eps:
+            count += 1
+        e_sum += b*b
+    return e_sum, count
+
+
+# def combined_basis_update(prev_basis, temp_basis, out_sum):
+    
+@njit(ortho_invalid_sig)
+def _invalid_e0_gs(
     parent_vars: np.ndarray, 
-    k: np.uint8, 
-    n: np.uint32,
+    nparents: np.uint32, 
+    nvars: np.uint32,
     g: np.ndarray,
     e_eta: np.ndarray,
-    is_all_zero: np.ndarray,
 ):
     """
     Special case where parent basis vector is a 0 vector
         (To avoid divide by 0 and all 0 offspring)
 
     Returns:
-       tuple: (basis vectors, whether basis vectors are 0, D, number of non zero vectors )
+       tuple: (basis vectors, D, number of non zero vectors)
     """    
     
-    EPS = np.finfo(np.float32).tiny
-    
-    # construct matrix for all basis vectors
     D = np.float32(0)
-    num_non_zero = np.uint8(0)
+    num_non_zero = np.uint32(0)
+    zero_chain = np.uint8(0)
     first_valid_idx = 0
-    for i in range(k-1):
-        d, d_nzero = _vectorized_subtract(parent_vars[i], g)
-        if d_nzero == n:
-            is_all_zero[i] = True
+    
+    for i in range(nparents-1):
+        d     = np.empty(nvars, dtype = np.float32)
+        d_nzero = np.empty(1, dtype = np.uint32)
+        _vectorized_subtract(parent_vars[i], g, d, d_nzero)
+        if d_nzero == nvars:
             continue
         
         e_sum = 0.0
-        temp_new_d = np.zeros(n, np.float32)
-        
+        zero_count = 0
+        temp_basis = np.zeros(nvars, np.float32)
         # A valid previous basis has not been found yet 
         # (no quotient with reference dot product)
         if num_non_zero == 0: 
-            for j in range(n):
+            for j in range(nvars):
                 d_sub = d[j]
-                if not abs(d_sub) < EPS:
-                    temp_new_d[j] = d_sub 
-                    e_sum += d_sub * d_sub
-                    
+                temp_basis[j] = d_sub 
+                e_sum += d_sub * d_sub   
         # A valid previous basis vector has been found
         else:
-            for var in range(n): # make a copy of first basis vector
-                temp_new_d[var] = e_eta[first_valid_idx, var]
+            for var in range(nvars): # make a copy of first basis vector
+                temp_basis[var] = e_eta[first_valid_idx, var]
             
-            for prev in range(first_valid_idx + 1, i):
-                if is_all_zero[prev]:
-                    continue
+            for prev in range(first_valid_idx, num_non_zero):
                 prev_basis = np.ascontiguousarray(e_eta[prev])
-                dot2 = np.dot(prev_basis, prev_basis)
-                if abs(dot2) < EPS:
-                    continue
-                dot1 = np.dot(temp_new_d, prev_basis)
-                quotient = dot1 / dot2
-                for j in range(n):
-                    new_d = temp_new_d[j] - quotient*prev_basis[j]
-                    temp_new_d[j] = new_d
-                    
-            # Find dot product of new basis vector
-            for j in range(n):
-                curr_d = temp_new_d[j] 
-                e_sum += curr_d * curr_d   
+                temp_basis -= temp_basis.dot(prev_basis) * prev_basis
+            
+            e_sum, zero_count = _sum_and_count(temp_basis, nvars, EPSILON)
         
         # Create final basis vector w/ magnitude
-        e_magnitude = np.sqrt(e_sum)
-        if e_magnitude < EPS:
-            is_all_zero[i] = True
+        if zero_count == nvars or e_sum < EPSILON:
+            zero_chain += 1
+            if zero_chain > 2:
+                break
         else:
+            zero_chain = 0
             if num_non_zero == 0:
                 first_valid_idx = i
-            num_non_zero += np.int32(1)
-            D += e_magnitude 
-            for j in range(n):
-                d_magnitude = (1.0 / e_magnitude) * temp_new_d[j]
-                e_eta[i,j] = d_magnitude
+            e_magnitude = np.sqrt(e_sum)
+            D += e_magnitude
+            e_eta[num_non_zero] = temp_basis / e_magnitude
+            num_non_zero += 1
     
-    return e_eta, is_all_zero, D, num_non_zero
+    return e_eta, D, num_non_zero
 
-# @njit(ortho_valid_sig)
-def _valid_e0_orthogonalize(
+
+@guvectorize(
+    [(float32[:], float32[:], float32, uint32, float32[:], float32[:]), 
+    (float64[:], float64[:], float64, uint32, float64[:], float64[:])],
+    '(x),(x),(),()->(x),()', nopython = True, cache = True
+)
+def _no_valid_basis(d, e0_hat, dot_d_e0, nvars, out_basis, out_sum):
+    e_sum = 0.0
+    for j in range(nvars):
+        d_sub = d[j] - (dot_d_e0 * e0_hat[j])
+        out_basis[j] = d_sub
+        e_sum += d_sub * d_sub
+    out_sum[0] = e_sum
+
+@njit(batch_sig)
+def _batch_gs(
     parent_vars: np.ndarray, 
-    nparent: np.uint8, 
-    n: np.uint32,
+    nparent: np.uint32, 
+    nvars: np.uint32,
     g: np.ndarray,
     e0: np.ndarray, 
     e_eta: np.ndarray,
-    is_all_zero: np.ndarray,
-    dot_reference: np.float32):
+):
+    
+    num_non_zero = np.uint32(0)
+    D = 0.0
+    EPS = np.finfo(np.float32).eps
+    e_eta = np.ascontiguousarray(e_eta)
+    e0 = np.ascontiguousarray(e0)
+    dot_reference = np.dot(e0, e0)
+    if dot_reference < EPSILON:
+        return _invalid_e0_gs(parent_vars, nparent, nvars, g, e_eta)
+    e0_hat = e0 / dot_reference
+    
+    for i in range(nparent -1):
+        d  = np.empty(nvars, dtype = np.float32)
+        d_nzero = np.empty(1,np.uint32)
+        _vectorized_subtract(parent_vars[i], g, d, d_nzero)
+        if d_nzero[0] == nvars:
+            continue
+ 
+        e_sum = 0.0
+        dot_d_first = np.dot(d, e0)
+        temp = np.ascontiguousarray(d - (dot_d_first * e0_hat))
+        if num_non_zero == 0: 
+            s = np.empty(1,np.float32)
+            _no_valid_basis(d, e0_hat, dot_d_first, nvars, temp, s)
+            e_sum = s[0]
+        else:
+            B = e_eta[:num_non_zero]
+            coeffs = B.dot(temp) 
+            temp -= coeffs @ B
+            e_sum = temp.dot(temp)
+            
+        if e_sum < EPS:
+            break
+        norm = np.sqrt(e_sum)
+        next = D + norm
+        D = next
+        e_eta[num_non_zero] = temp / norm
+        num_non_zero += 1
+        if norm / next < 5e-5:
+            break
+    
+    return e_eta, D, num_non_zero
+    
+
+@njit(ortho_valid_sig)
+def _modified_gs(
+    parent_vars: np.ndarray, 
+    nparent: np.uint32, 
+    nvars: np.uint32,
+    g: np.ndarray,
+    e0: np.ndarray, 
+    e_eta: np.ndarray):
     """
     k = num parents
     n = num variables per parent
@@ -173,77 +266,99 @@ def _valid_e0_orthogonalize(
 
     Returns: (updated basis vectors, if basis vectors are non-zero, D, num_non_zero vectors)
     """    
-    
-    EPS = np.finfo(np.float32).tiny
-    
     # construct matrix for all basis vectors
     D = np.float32(0)
-    num_non_zero = np.uint8(0)
+    num_non_zero = 0
     e0 = np.ascontiguousarray(e0)
+    dot_reference = np.dot(e0, e0)
+    if dot_reference < EPSILON:
+        return _invalid_e0_gs(parent_vars, nparent, nvars, g, e_eta)
+    
+    e0_hat = e0 / dot_reference
+    e_eta = np.ascontiguousarray(e_eta)
+    zero_chain = np.uint8(0)
+    
     for i in range(nparent-1):
-        d, d_nzero = _vectorized_subtract(parent_vars[i], g)
-        if d_nzero == n:
-            is_all_zero[i] = True
+        d      = np.empty(nvars, dtype = np.float32)
+        d_nzero = np.empty(1,np.uint32)
+        _vectorized_subtract(parent_vars[i], g, d, d_nzero)
+        if d_nzero[0] == nvars:
             continue
         
         e_sum = 0.0
-        temp_new_d = np.zeros(n, np.float32)
         dot_d_first = np.dot(d, e0)
-        quotient_first = dot_d_first / dot_reference
-        # print(f"dot_d_first {dot_d_first }, dot_d_referece {dot_reference}")
-        
+        temp_basis = np.ascontiguousarray(d - (dot_d_first * e0_hat))
+
         # A valid previous basis has not been found yet
         if num_non_zero == 0: 
-            for j in range(n):
-                d_sub = d[j] - (quotient_first * e0[j])
-                if not abs(d_sub) < EPS:
-                    temp_new_d[j] = d_sub
-                    e_sum += d_sub * d_sub
+            t = np.empty(1,np.float32)
+            _no_valid_basis(d, e0_hat, dot_d_first, nvars, temp_basis, t)
+            e_sum = t[0]
         else:
-            # First basis vector is always the e0 vector
-            for j in range(n): 
-                d_sub = d[j] - (quotient_first * e0[j])
-                if not abs(d_sub) < EPS:
-                    temp_new_d[j] = d_sub
-            
-            # Include all previous basis vectors that are non-zero
-            for prev in range(i):
-                if is_all_zero[prev]:
-                    continue
-                prev_basis = np.ascontiguousarray(e_eta[prev])
-                dot2 = np.dot(prev_basis, prev_basis)
-                if abs(dot2) < EPS:
-                    continue
-                dot1 = np.dot(temp_new_d, prev_basis)
-                quotient = dot1 / dot2
-                for j in range(n):
-                    new_d = temp_new_d[j] - quotient*prev_basis[j]
-                    temp_new_d[j] = new_d
-            
-            # Find dot product of new basis vector
-            for j in range(n):
-                curr_d = temp_new_d[j] 
-                e_sum += curr_d * curr_d
-        
+            for prev in range(num_non_zero):
+                temp_basis -= temp_basis.dot(e_eta[prev]) * e_eta[prev]
+            e_sum = temp_basis.dot(temp_basis)
+
         # Create final basis vector w/ magnitude
-        e_magnitude = np.sqrt(e_sum)
-        if e_magnitude < EPS:
-            is_all_zero[i] = True
+        if  e_sum < EPSILON:
+            zero_chain += 1
+            if zero_chain > 2:
+                break
         else:
-            num_non_zero += 1
+            zero_chain = 0
+            e_magnitude = np.sqrt(e_sum)
             D += e_magnitude 
-            for j in range(n):
-                d_magnitude = (1.0 / e_magnitude) * temp_new_d[j]
-                e_eta[i,j] = d_magnitude
+            e_eta[num_non_zero] = temp_basis / e_magnitude
+            num_non_zero += 1
+        
+    return e_eta, D, num_non_zero
 
-    return e_eta, is_all_zero, D, num_non_zero
 
+@njit(cgs_sig)
+def _classic_gs(
+    parent_vars: np.ndarray,
+    nparents,
+    nvars,
+    g):
+           
+    d_reference = parent_vars[-1] - g
+    d_rest  = parent_vars[:-1] - g  
+    
+    e_eta = np.empty((nvars, nparents), parent_vars.dtype) #transposed
+    e_eta[:, 0] = d_reference
+    e_eta[:, 1:] = d_rest.T
+    
+    Q, R = np.linalg.qr(e_eta)    
+    r = np.abs(np.diag(R))      
+    D = r[1:].sum()
+    
+    non_zero_indices = np.where(r > EPSILON)[0]
+    n_non_zero = len(non_zero_indices)
+    first_included = non_zero_indices[0] == 0 
+    if n_non_zero == 0 or (n_non_zero == 1 and first_included):
+        return np.zeros((1,nvars), parent_vars.dtype), D, 0
+    
+    out = np.empty((n_non_zero - 1, nvars), parent_vars.dtype)
+    start = 1 if non_zero_indices[0] == 0 else 0
+    for i in range(start, n_non_zero):
+        col = non_zero_indices[i]
+        out[i-start,:] = Q[:, col]
+    return out, D, n_non_zero
+    
+def _apply_pcx(
+    parent_vars, e_eta, 
+    noffspring,
+    nvars,
+    D, num_non_zero, 
+    eta, zeta):
+    output = np.zeros((noffspring, nvars), np.float32)
+    pass
 
-# @njit("float32[:, :](float32[:, :], uint8, uint8, uint32, float32[:], float32[:], float32[:, :], float32, float32)")
+@njit("float32[:, :](float32[:, :], uint32, uint32, uint32, float32[:], float32[:], float32[:, :], float32, float32)")
 def _orthogonalize_pcx(
     parent_vars:np.ndarray, 
-    noffspring: np.uint8,
-    k: np.uint8, 
+    noffspring: np.uint32,
+    k: np.uint32, 
     n: np.uint32,
     g: np.ndarray,
     e0: np.ndarray, 
@@ -262,16 +377,14 @@ def _orthogonalize_pcx(
     D = np.float32(0)
     is_all_zero = np.zeros(k-1, np.bool_)
     num_non_zero = np.uint8(0)
-    e0 = np.ascontiguousarray(e0)
-    dot_reference = np.dot(e0, e0)
-    if abs(dot_reference) < EPS: # Using quotient for e0 is invalid
-        e_eta, is_all_zero, D, num_non_zero = _invalid_e0_orthogonalize(
-            parent_vars, k, n, g, e_eta, is_all_zero
-        )
+
+    if max(k,n) < 100 or n <= 10:
+        e_eta, D, num_non_zero = _modified_gs(parent_vars, k, n, g, e0, e_eta)
+    elif k == n:
+        e_eta, D, num_non_zero = _classic_gs(parent_vars, k, n, g)
     else:
-        e_eta, is_all_zero, D, num_non_zero = _valid_e0_orthogonalize(
-            parent_vars, k, n, g, e0, e_eta, is_all_zero, dot_reference)
-    
+        e_eta, D, num_non_zero = _batch_gs( parent_vars, k, n, g, e0, e_eta)
+        
     # Find all offspring variables
     D /= np.float32(k - 1)
     output = np.zeros((noffspring, n), np.float32)
@@ -305,10 +418,10 @@ def _orthogonalize_pcx(
             
     return output
 
-# @njit("float32[:](float32[:], uint8, float32, float32, boolean)")
+@njit("float32[:](float32[:], uint8, float32, float32, boolean)")
 def normalized_1d_pcx(
     parent_vars: np.ndarray, 
-    noffspring: np.uint8, 
+    noffspring: np.uint32, 
     eta: np.float32,
     zeta: np.float32,
     randomize = True):
@@ -440,3 +553,14 @@ def normalized_2d_pcx(
         curr_row += count
 
     return output
+
+
+# @guvectorize(
+#     [(float32[:,:], float32[:], uint32, float32[:]), 
+#      (float64[:,:], float32[:], uint32, float64[:])], 
+#     '(x,y),(x),()->(y)', nopython = True, cache = True)
+# def _safe_mat_mult(prev_bases, coeffs, nvars, temp_basis):
+#     nbasis = len(coeffs)
+#     for b in range(nbasis):
+#         for n in range(nvars):
+#             temp_basis[n] -= coeffs[b] * prev_bases[b,n]

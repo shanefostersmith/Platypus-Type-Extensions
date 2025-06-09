@@ -173,13 +173,5 @@ def test_differential_evolve3(nspawns, np32_ranges_DE): # test gu
         end_time = time.perf_counter()
         print(f"SFC: {end_time - start_normal}\n")
         
-        # start2 = time.perf_counter()
-        # for i in range(LOOPS):
-        #     gens = bit_gen2.spawn(nspawns)
-        #     pg_list = List.empty_list(typeof(bit_gen2), nspawns)
-        #     for j in range(nspawns):
-        #         pg_list.append(gens[j])
-        #     parallel_DE_with_probability(pg_list, orig, p1, p2, p3, matrix, step_size, crossover_rate)
-         
-        # end2 = time.perf_counter()
-        # print(f"PCG: {end2 - start2}\n")
+def test_pcx():
+    pass

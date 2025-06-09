@@ -2,12 +2,10 @@ import pytest
 import numpy as np
 import custom_types.real_methods.numba_pcx as pcx
 from tests.conftest import np_normalized_vector32, np_normalized_matrix32
-# from custom_types.utils import (
-#     gu_normalize2D_1D, gu_normalize2D_2D,
-#     gu_denormalize2D_1D, gu_denormalize2D_2D,
-#     vector_normalize1D, vectorized_to_norm)
 from custom_types.real_methods.numba_pcx import (normalized_1d_pcx, normalized_2d_pcx)
 from pytest_mock import MockerFixture
+from platypus._math import orthogonalize, subtract, add
+
 
 class TestNormalizedPCX:
     
