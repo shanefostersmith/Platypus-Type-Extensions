@@ -1,129 +1,70 @@
 import pytest
 import numpy as np
 import custom_types.real_methods.numba_pcx as pcx
-from tests.conftest import np_normalized_vector32, np_normalized_matrix32
-from custom_types.real_methods.numba_pcx import (normalized_1d_pcx, normalized_2d_pcx)
+from tests.conftest import noffspring
+from tests.test_real_int.conftest import p_matrix, _batch_pcx, _mod_pcx, _numpy_pcx
 from pytest_mock import MockerFixture
-from platypus._math import orthogonalize, subtract, add
-
 
 class TestNormalizedPCX:
     
-    @pytest.mark.parametrize(
-        "nrows,ncols,zero_reference,zero_column",
-        [
-            (2, 5, False, False),
-            (2, 2, True, False),
-            (2, 2, False, True)
-        ],
-        ids = ["rand", "zero_ref", "zero_col"],
-        indirect=["nrows", "ncols", "zero_reference", "zero_column"],
-    )
-    def test_run_no_error(
-        self, 
-        nrows, ncols, zero_reference, zero_column, 
-        np_normalized_matrix32):
+    def test_gs_smoke(self,p_matrix):
         
-        normalized_2d_pcx(
-            parent_vars = np_normalized_matrix32, 
-            noffspring = 1,
-            eta = np.float32(0.1),
-            zeta = np.float32(0.1),
-            randomize=False
-        )
-        normalized_2d_pcx(
-            parent_vars = np_normalized_matrix32, 
-            noffspring = 1,
-            eta = np.float32(0.1),
-            zeta = np.float32(0.1),
-            randomize=True
-        )
+        nparents = np.uint32(p_matrix.shape[0])
+        nvars = np.uint32(p_matrix.shape[1])
         
-    @pytest.mark.parametrize(
-        "nrows, ncols, zero_reference, zero_column",
-        [(2, 5, False, False)],
-        ids = ["valid_e0"],
-        indirect=["nrows", "ncols", "zero_reference", "zero_column"],
-    )
-    def test_valid_call(self, 
-        nrows, ncols, zero_reference, zero_column, 
-        np_normalized_matrix32, mocker: MockerFixture):
+        print("NP PCX: \n")
+        np_eta, D, nvect1 = _numpy_pcx(p_matrix, nparents, nvars)
+        # print(np_eta[1:,:])
+        # print(np_eta)
+        print(f"num_vectors: {nvect1}, D: {D}")
+        print("----------------- \n")
         
-        # remove from njit decorators
-        orig_orth = pcx._orthogonalize_pcx.py_func
-        orig_valid = pcx._valid_e0_orthogonalize.py_func
-        orig_invalid = pcx._invalid_e0_orthogonalize.py_func
-        mocker.patch.object(pcx, "_invalid_e0_orthogonalize", orig_invalid)
-        mocker.patch.object(pcx, "_valid_e0_orthogonalize", orig_valid)
-        mocker.patch.object(pcx, "_orthogonalize_pcx",      orig_orth)
+        new_eta, D2, nvect2 = _mod_pcx(p_matrix, nparents, nvars)
+        print(f"NEW PCX: num_vectors: {nvect2}, new_D = {D2} \n")
+        # print(new_eta)
+        print("----------------- \n")
         
-        
-        spy = mocker.spy(pcx, "_valid_e0_orthogonalize")
-        spy2 = mocker.spy(pcx, "_invalid_e0_orthogonalize")
-        
-        pcx.normalized_2d_pcx(
-            parent_vars = np_normalized_matrix32, 
-            noffspring = 1,
-            eta = np.float32(0.1),
-            zeta = np.float32(0.1),
-            randomize=False
-        ) 
-        spy.assert_called()
-        spy2.assert_not_called()
+        batch_eta, D3, nvect3 = _batch_pcx(p_matrix, nparents, nvars)
+        print(f"BATCH PCX: num_vectors: {nvect3}, new_D = {D3} \n")
+        # print(batch_eta)
     
+    @pytest.mark.parametrize('randomize', [True, False])
+    def test_main_smoke(self,randomize, p_matrix, noffspring):
+        
+        out = pcx.normalized_2d_pcx(
+            parent_vars=p_matrix, 
+            noffspring=noffspring, 
+            eta = 0.25, zeta = 0.25,
+            randomize=randomize
+        )
+        assert out.shape[0] == noffspring
+        assert out.shape[1] == p_matrix.shape[1]
+        assert np.all(out >= 0.0)
+        assert np.all(out <= 1.0)
 
-    def test_invalid_call(self,mocker: MockerFixture):
+    def test_zeros_empty(self, mocker: MockerFixture):
         
         # remove from njit decorators
-        orig_orth = pcx._orthogonalize_pcx.py_func
-        orig_valid = pcx._valid_e0_orthogonalize.py_func
-        orig_invalid = pcx._invalid_e0_orthogonalize.py_func
-        mocker.patch.object(pcx, "_invalid_e0_orthogonalize", orig_invalid)
-        mocker.patch.object(pcx, "_valid_e0_orthogonalize", orig_valid)
-        mocker.patch.object(pcx, "_orthogonalize_pcx",      orig_orth)
-
-        spy = mocker.spy(pcx, "_valid_e0_orthogonalize")
-        spy2 = mocker.spy(pcx, "_invalid_e0_orthogonalize")
-        matrix = np.zeros((10,4), np.float32)
-        
-        offspring = pcx.normalized_2d_pcx(
-            parent_vars = matrix, 
+        # orig_invalid = pcx._invalid_e0_gs.py_func
+        # mocker.patch.object(pcx, "_invalid_e0_gs", orig_invalid)
+        # spy = mocker.spy(pcx, "_invalid_e0_gs")
+        zero_matrix = np.zeros((10,4), np.float32)
+        empty_matrix = np.zeros((0,4), np.float32)
+        _ = pcx.normalized_2d_pcx(
+            parent_vars = zero_matrix, 
             noffspring = 8,
             eta = np.float32(0.1),
             zeta = np.float32(0.1),
             randomize=True
         ) 
-        print(offspring)
-        spy2.assert_called()
-        spy.assert_not_called()
+        _ = pcx.normalized_2d_pcx(
+            parent_vars = empty_matrix, 
+            noffspring = 8,
+            eta = np.float32(0.1),
+            zeta = np.float32(0.1),
+            randomize=True
+        ) 
+        
     
-    @pytest.mark.parametrize(
-        "vector_size,vector_kind",
-        [
-            (10, "random"),
-            (10, "zeros"),
-        ],
-        ids=["10-random", "10-zeros"],
-        indirect=["vector_size", "vector_kind"],
-    )   
-    def test_1d_call(self, np_normalized_vector32, noffspring, mocker: MockerFixture):
-        
-        # remove from njit decorators
-        orig_orth = pcx._orthogonalize_pcx.py_func
-        orig_1D = pcx.normalized_1d_pcx.py_func
-        mocker.patch.object(pcx, "normalized_1d_pcx", orig_1D)
-        mocker.patch.object(pcx, "_orthogonalize_pcx", orig_orth)
-        
-        spy = mocker.spy(pcx, "normalized_1d_pcx")
-        spy2 = mocker.spy(pcx, "_orthogonalize_pcx")
-        
-        matrix = np.empty((len(np_normalized_vector32), 1))
-        
-        matrix[:,0] = np_normalized_vector32
-        # print(f"noffpring: {noffspring}, before: {matrix}")
-        offspring = pcx.normalized_2d_pcx(matrix, noffspring, np.float32(0.1), np.float32(0.1), True)
-        # print(f'after {offspring}')
-        
-        spy.assert_called()
-        spy2.assert_not_called()
+ 
 

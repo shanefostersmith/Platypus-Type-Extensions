@@ -6,6 +6,7 @@ from .point_bounds import PointBounds
 from .monotonic_distributions import MonotonicDistributions
 from ._distribution_tools import DistributionInfo
 from ..utils import clip
+from math import ceil, floor
 
 class SymmetricDistributions(MonotonicDistributions):
     """(in progress)"""
@@ -16,7 +17,6 @@ class SymmetricDistributions(MonotonicDistributions):
         local_variator = None,
         local_mutator = None,
         ordinal_maps = False,
-        **variator_overrides
         ):
         
         for i, map in enumerate(mappings):
@@ -29,7 +29,6 @@ class SymmetricDistributions(MonotonicDistributions):
             local_mutator,
             ordinal_maps,
             sort_ascending=True,
-            **variator_overrides
         )
     
     def rand(self):
@@ -37,36 +36,37 @@ class SymmetricDistributions(MonotonicDistributions):
         bijection: SymmetricBijection = self.map_suite[rand_function_idx] 
         all_bounds = bijection.point_bounds
         
-        x_min, max_x_start = all_bounds.first_point_bounds
-        min_x_end, x_max = all_bounds.last_point_bounds
- 
-        output_start = None
-        true_min_width = all_bounds.true_min_width
-        true_max_width = all_bounds.true_max_width
-        output_width = None if true_min_width != true_max_width else true_min_width
-        output_start = x_min if x_min == max_x_start else np.random.uniform(x_min, max_x_start)
-        center_x = bijection.center_x
-        # TODO if not fixed width, get separation first, then determine start
-
-        # Get a random width of output
-        if output_width is None:
-            curr_max_width = min(x_max - output_start, true_max_width)
-            curr_min_width = None
-            if min_x_end is not None and output_start < min_x_end:
-                curr_min_width = clip(min_x_end - output_start, true_min_width, curr_max_width)
-            output_width = curr_min_width if curr_min_width == curr_max_width else np.random.uniform(curr_min_width, curr_max_width)
+        x_min, max_first_x = all_bounds.first_point_bounds
+        min_last_x, x_max = all_bounds.last_point_bounds
         
-        # Get random points and x separation
-        true_min_points, true_max_points = all_bounds.get_conditional_cardinality_with_width(output_width)
-        output_points = true_min_points if true_min_points == true_max_points else np.random.randint(true_min_points, true_max_points+1)
-        output_separation = output_width / all_bounds.dtype(output_points - 1)
+        
+        if max_first_x == x_min and min_last_x == x_max: # have to choose separation after points
+            width = x_max - x_min
+            true_min_points, true_max_points = all_bounds.get_conditional_cardinality_with_width(width)
+            output_points = true_min_points if true_min_points == true_max_points else np.random.int(true_min_points, true_max_points)
+            separation = width / all_bounds.dtype(output_points - 1)
+            output_min_x = x_min
+            output_max_x = x_max
+            return  DistributionInfo(
+                map_index = rand_function_idx,
+                num_points = output_points,
+                separation =  separation ,
+                output_min_x = output_min_x,
+                output_max_x = output_max_x
+            )
+        output_min_x = None
+        output_max_x = None
+        output_points = None
+            
+        #TODO: Find bounds
         
         return DistributionInfo(
             map_index = rand_function_idx,
             num_points = output_points,
-            separation =  output_separation ,
-            output_min_x = output_start,
-            output_max_x = output_start + output_width)
+            separation =  separation ,
+            output_min_x = output_min_x,
+            output_max_x = output_max_x
+        )
     
     def encode(self, value):
         

@@ -645,22 +645,16 @@ class DistributionBoundsPCX(LocalVariator):
         
         # Do PCX by "reference" parent
         parent_to_row = np.arange(new_nparents, dtype=np.uint16)
-        row_to_parent = np.arange(new_nparents, dtype=np.uint16)
+        parent_at_last_row = new_nparents - 1
         for parent_idx, offspring_indices in copy_groups.items():
-            # print(f"parent_idx; {parent_idx}")
-            # print(f"row_to_parent: {row_to_parent}")
-            # print(f"parent_to_row: {parent_to_row}")
             
-            # Swap parent copy to "reference" row
-            row_of_parent_idx = parent_to_row[parent_idx]
-            parent_vars[[row_of_parent_idx, -1]] = parent_vars[[-1, row_of_parent_idx]]
-            p_i, p_last = row_to_parent[row_of_parent_idx], row_to_parent[-1]
-            row_to_parent[row_of_parent_idx], row_to_parent[-1] = p_last, p_i
-            parent_to_row[p_i], parent_to_row[p_last] = new_nparents - 1, row_of_parent_idx
-            
-            # print(f"POST_SWAP: row_to_parent: {row_to_parent }")
-            # print(f"POST_SWAP: parent_to_row: {parent_to_row}")
-            
+            new_reference_row = parent_to_row[parent_idx]
+            parent_vars[[new_reference_row, -1]] = parent_vars[[-1, new_reference_row]]
+            parent_to_row[parent_idx] = new_nparents -1
+            parent_to_row[parent_at_last_row] = new_reference_row
+            parent_at_last_row = parent_idx
+            # assert len(np.unique(parent_to_row)) == new_nparents, f"new_nparents = {new_nparents}, p->r{parent_to_row}"
+
             new_vars = normalized_2d_pcx(parent_vars, len(offspring_indices), eta, zeta, randomize=False)
             for i, offspring_idx in enumerate(offspring_indices):
                 

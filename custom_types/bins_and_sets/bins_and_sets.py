@@ -518,10 +518,9 @@ class WeightedSetCrossover(LocalVariator):
         num_actives = [None for _ in range(noffspring)]
         curr_weights = [np.float32(1.0) for _ in range(noffspring)]
         parent_to_row = None if not weight_crossover_rate else np.arange(nparents, dtype = np.uint16)
-        row_to_parent = None if not weight_crossover_rate else np.arange(nparents, dtype = np.uint16)
+        parent_at_last_row = nparents -1
+        
         for i, offspring in enumerate(offspring_solutions):
-            
-            
             do_weight_crossover = weight_crossover_rate > 0 and (do_crossover or np.random.uniform() < weight_crossover_rate)
             if not (do_feature_crossover or do_weight_crossover):
                 continue
@@ -529,8 +528,7 @@ class WeightedSetCrossover(LocalVariator):
             temp_directory = None
             curr_directory = offspring.variables[variable_index]
             offspring.evaluated = False
-            # _, counts = np.unique(curr_directory[curr_directory > 0], return_counts=True)
-            # print(f"BEFORE: Highest same count: {counts.max()}, nactives = {np.count_nonzero(curr_directory)}, value")
+
             if do_weight_crossover:
                 # Swap parent copy to "reference" row
                 parent_idx = copy_indices[i]
@@ -540,12 +538,13 @@ class WeightedSetCrossover(LocalVariator):
                     parent_vars[parent_idx] = curr_directory
                     
                 if parent_idx < nparents - 1: 
-                    row_to_last = parent_to_row[parent_idx]
-                    parent_vars[[row_to_last, -1]] = parent_vars[[-1, row_to_last]]
-                    p_i, p_last = row_to_parent[parent_idx], row_to_parent[-1]
-                    row_to_parent[parent_idx], row_to_parent[-1] = p_last, p_i
-                    parent_to_row[p_i], parent_to_row[p_last] = nparents - 1, row_to_last
-            
+                    new_reference_row = parent_to_row[parent_idx]
+                    parent_vars[[new_reference_row, -1]] = parent_vars[[-1, new_reference_row]]
+                    parent_to_row[parent_idx] = nparents -1
+                    parent_to_row[parent_at_last_row] = new_reference_row
+                    parent_at_last_row = parent_idx
+                    # assert len(np.unique(parent_to_row)) == nparents, f"{parent_to_row}"
+                    
             offspring.evaluated = False
             curr_directory = offspring.variables[variable_index]
             if do_weight_crossover and not do_feature_crossover: # No change in active features
@@ -564,8 +563,6 @@ class WeightedSetCrossover(LocalVariator):
                     parent_vars[-1] = temp_directory
                     temp_directory = None
                 
-                # _, counts = np.unique(curr_directory[curr_directory > 0], return_counts=True)
-                # print(f"AFTER - weight: Highest same count: {counts.max()}\n")
                 continue
             
             if do_weight_crossover: # Both crossovers
@@ -651,9 +648,6 @@ class WeightedSetCrossover(LocalVariator):
                     curr_weights[i] += added_weight
                     prev_active_indices.extend(new_features)
                     
-                    # values, counts = np.unique(offspring.variables[variable_index][offspring.variables[variable_index]> 0], return_counts=True)
-                    # print(f"AFTER - add: Highest same count: {counts.max()}, out of # added = {len(new_features)}\n, with value = {values[counts == counts.max()]}")
-                   
                 num_actives[i] = int(new_size)
                 active_features_indices[i] = prev_active_indices
                 

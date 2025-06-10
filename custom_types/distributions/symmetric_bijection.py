@@ -2,6 +2,7 @@ import numpy as np
 from functools import partial
 from collections.abc import Hashable
 from numbers import Integral, Number
+from typing import Literal, Union
 from .point_bounds import PointBounds
 from ._bounds_tools import BoundsState
 from .real_bijection import RealBijection
@@ -44,21 +45,20 @@ class SymmetricBijection(RealBijection):
     """    
     
     def __init__(self,
-        forward_function: partial | callable,
-        forward_args: dict | None,
-        inverse_function: partial | callable | None,
-        inverse_args: dict | None,
-        convexity: bool,
+        forward_function: Union[partial, callable],
         center_x: Number,
         right_side_provided: bool,
         min_width: Number,
         max_width: Number,
         min_points: int = 4,
         max_points: int = 100,
+        inverse_function: Union[partial, callable, None] = None,
+        forward_args: dict = {},
+        inverse_args: dict = {},
         include_global_extrema = False,
         exclude_global_extrema = False,
         point_bounds: PointBounds | BoundsState | None = None,
-        return_type: type = np.float32,
+        precision: Literal['double','single'] = 'double',
         unique_id: Hashable | None = None):
         """ `
         Args
@@ -79,21 +79,13 @@ class SymmetricBijection(RealBijection):
             
             inverse_args (dict | None): Keyword arguments for the inverse map function
             
-            convexity (bool): Indicates if the function/distribution is concave downward or concave upwards
-            
-                - If True, then the function is strictly decreasing around a global maxima 
-                (like a Normal/Gaussian distribution)
-            
-                - If False, then the function is strictly increasing around a global minima 
-                (like `y = x^2`)
-            
             center_x (Number: The x value that maps to the global minima / maxima
             
             right_side_provided (bool): 
             
-                - If True, indicates that the forward / inverse functions are for x values > center x 
+                - If True, indicates that the forward / inverse functions are for x values >= center x 
                 
-                - If False, indicates that the forward / inverse functions are for x values < center x 
+                - If False, indicates that the forward / inverse functions are for x values <= center x 
             
             min_width (Number, optional): The minimum distance between first and last **x** value 
 
@@ -106,10 +98,6 @@ class SymmetricBijection(RealBijection):
                 - i.e. the maximum distance from the center x **times 2**
                 
                 - Must be provided if *point_bounds* is not provided
-                
-            inclusive_min_width (bool, optional): Indicates if the min width is inclusive. Defaults to True
-            
-            inclusive_max_width (bool, optional): Indicates if the max width is inclusive. Defaults to True
                 
             include_global_extrema (bool, optional): Indicates if the global minima or maxima should **always** be included in the output arrays. Defaults to False.
             
@@ -131,9 +119,7 @@ class SymmetricBijection(RealBijection):
             
                 - **Should be created with the 'create_bounds_for_symmetry()'* function**
 
-            return_type (type, optional): The numeric type of the output numpy arrays. Defaults to numpy.float64.
-            
-                - *Currently, only numpy floats are supported (and not float128)
+            precision (type, optional): The numeric type of the output numpy arrays, 'single' (float32) or 'double' (float64). Defaults to 'double`.
             
             unique_id (Hashable | None, optional): (See *RealBijection*)). Defaults to None.
         
@@ -141,11 +127,14 @@ class SymmetricBijection(RealBijection):
         
         all_bounds = point_bounds
         if point_bounds is None or not isinstance(point_bounds, PointBounds):
-          all_bounds, return_type = create_bounds_for_symmetry(
-              center_x, min_width, max_width, 
+          all_bounds = create_bounds_for_symmetry(
+              center_x, 
+              min_width, max_width, 
               min_points, max_points,
-              include_global_extrema, exclude_global_extrema,
-              right_side_provided, return_type)
+              include_global_extrema, 
+              exclude_global_extrema,
+              right_side_provided, 
+              precision)
         else:
             all_bounds = point_bounds
 
@@ -160,7 +149,8 @@ class SymmetricBijection(RealBijection):
         self.center_x = center_x
         self.include_global_extrema = include_global_extrema
         self.exclude_global_extrema = exclude_global_extrema
-        self.right_side_provided = right_side_provided 
+        self.right_side_provided = right_side_provided
+        
 
         
     def _adjust_start(self, output_start, output_points, output_separation):
@@ -231,32 +221,33 @@ def create_bounds_for_symmetry(
     include_global_extrema = False,
     exclude_global_extrema = False,
     right_side_provided = True,
-    return_type: type = np.float32,
+    precision: Literal['double','single'] = 'double',
     create_bounds_state = False):
     """
-    Create a PointBounds object for a SymmetricUnimodal
+    Create a PointBounds object for a SymmetricBijection
     
-    This function is called at initialization by SymmetricUnimodal if a PointBounds object is not provided.
+    This function is called at initialization by SymmetricBijection if a PointBounds object is not provided.
     
     You can use this function to prevent multiple copies of a PointBounds object from being created
         (if creating multiple SymmetricBijection objects with the same 'x' bounds and min/max point bounds)
         
     See SymmetricBijection
     """    
-    
-    # Check return type
-    if return_type is float:
-        return_type = np.float32
-    elif not issubclass(return_type, np.number):
-        raise ValueError("The return type must be a numpy numeric type or a python float")
+    return_type = np.float64 if precision == 'double' else np.float32
     
     # Check min / max width and points
     min_width = return_type(min_width) 
     max_width = return_type(max_width)
     if min_width <= 0:
         raise ValueError("min_width must be > 0")
+    
     if min_width > max_width:
         raise ValueError("min_width cannot be larger than max_width")
+    min_width = return_type(
+        max(2.0 * np.spacing(abs(center_x) + max_width / 2, dtype = return_type), min_width)
+    )
+    max_width = return_type(max(min_width, max_width))
+    
     if min_points < 4:
         raise ValueError("min_points must be at least 4")
     if min_points > max_points:
@@ -290,56 +281,54 @@ def create_bounds_for_symmetry(
             if max_points % 2 == 1:
                 max_points += 1
 
-        # Determine "half" bounds
-        min_separation = min_width / return_type(max_points - 1)
-        max_separation = max_width / return_type(min_points - 1)
-        x_min = None
-        x_max = None
-        max_first_x = None
-        min_last_x = None
-        if right_side_provided:
-            x_min = center_x + min_separation / 2 if exclude_global_extrema else center_x
-            if include_global_extrema:
-                max_first_x = x_min
-            else:
-                max_first_x = center_x + max_separation / 2
-            x_max = center_x + max_width / 2
-            min_last_x = center_x + (min_width / return_type(2))
-
-        else:
-            x_max = center_x - min_separation / 2 if exclude_global_extrema else center_x
-            if include_global_extrema:
-                min_last_x = x_max
-            else:
-                min_last_x  = center_x - max_separation / 2
-            x_min = center_x - max_width / 2
-            max_first_x = center_x - (min_width / return_type(2))
-        
-        half_min_points = min_points // 2
-        half_max_points = max_points // 2
-        if include_global_extrema:
-            half_min_points += 1
-            half_max_points += 1
-        elif not exclude_global_extrema and max_points % 2 == 1:
-            half_max_points += 1
-        
-        # Set bounds object
-        point_bounds = PointBounds(
-            x_min, x_max,
-            min_points = half_min_points, 
-            max_points = half_max_points,
-            dtype = return_type
-        )
-        if min_width == max_width and include_global_extrema:
-            point_bounds.set_fixed_width(x_max - x_min)
-        else:
-            point_bounds.set_first_point_upper_bound(max_first_x)
-            point_bounds.set_last_point_lower_bound(min_last_x)
+    # Determine "half" bounds
+    min_separation = min_width / return_type(max_points - 1)
+    max_separation = max_width / return_type(min_points - 1)
+    half_min_points = min_points // 2 
+    half_max_points = max_points // 2 
+    half_max_width = max_width / 2.0
+    half_min_width = min_width / 2.0
+    if not min_separation * return_type(half_max_points - 1) >= half_min_width:
+        half_max_points += 1
+    if not max_separation * return_type(half_min_points - 1) <= half_max_width:
+        assert half_min_points > 2
+        half_min_points -= 1
             
-        point_bounds.set_min_separation(min_separation)
-        point_bounds.set_max_separation(max_separation)
+    
+    x_min = None
+    x_max = None
+    max_first_x = None
+    min_last_x = None
+    if right_side_provided:
+        x_min = center_x
+        max_first_x = x_min if include_global_extrema else center_x + max_separation / 2.0
+        x_max = center_x + half_max_width
+        min_last_x = x_min + half_min_width
+    else:
+        x_max = center_x
+        min_last_x = x_max  - max_separation / 2.0
+        x_min = center_x - half_max_width
+        max_first_x = center_x - half_min_width
+    
+    # Set bounds object
+    point_bounds = PointBounds(
+        x_min, x_max,
+        minimum_points = half_min_points, 
+        maximum_points = half_max_points,
+        precision=precision
+    )
+    if min_width == max_width and include_global_extrema:
+        point_bounds.set_fixed_width(x_max - x_min)
+    else:
+        point_bounds.set_first_point_upper_bound(max_first_x)
+        point_bounds.set_last_point_lower_bound(min_last_x)
         
-        if create_bounds_state:
-            return point_bounds.create_bounds_state()
+    point_bounds.set_min_separation(min_separation)
+    point_bounds.set_min_points(half_min_points)
+    point_bounds.set_max_separation(max_separation)
+    
+    if create_bounds_state:
+        return point_bounds.create_bounds_state()
+    else:
         return point_bounds
     

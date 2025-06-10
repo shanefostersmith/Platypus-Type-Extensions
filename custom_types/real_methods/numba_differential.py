@@ -3,7 +3,7 @@ from numba.np.random.new_random_methods import buffered_bounded_lemire_uint32
 from numba import (
     njit, guvectorize, 
     float32, float64, boolean,
-    prange, typeof)
+    prange, typeof, optional)
 from ..utils import _float32_min_max_norm, _min_max_norm_convert
 
 bitgen = np.random.SFC64(7)
@@ -29,10 +29,10 @@ def real_mutation(x, lb, ub, distrib_idx):
 real_evolve_sig = [
     float32(float32, float32, float32, float32, float32, float32, boolean),
     float64(float64, float64, float64, float64, float64, float32, boolean),
-    float64(float64, float64, float64, float64, float64, float64, boolean)
+    float64(float64, float64, float64, float64, float64, float64, boolean),
 ]
 @njit(real_evolve_sig)
-def differential_evolve(min_val, max_val, p1, p2, p3, step_size, normalize_initial = True):
+def differential_evolve(min_val, max_val, p1, p2, p3, step_size, normalize_initial):
     y = 0
     clipped_y = 0.0
     if normalize_initial:

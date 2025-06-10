@@ -1,10 +1,8 @@
 
 import numpy as np
-from numba import njit, vectorize, guvectorize, types, prange, uint32, float32, float64, boolean
-from numba import types
 from sys import float_info
-from math import ceil
-import warnings
+from collections import namedtuple
+from numba import jit, njit, guvectorize, typeof, types, prange, uint32, float32, float64, boolean
 
 """
 Two methods for PCX using static typing:
@@ -12,48 +10,18 @@ Two methods for PCX using static typing:
     - normalized_2d_pcx() -> multi-variable case (i.e. usual case)
 
 """
+
 EPSILON = float_info.epsilon
-ortho_ret_type = types.Tuple((
-    float32[:, :], 
-    float32, 
-    uint32
-))
-
-cgs_ret_type = types.Tuple((
-    float32[:, :], 
-    float32, 
-    uint32
-))
-
-ortho_valid_sig = ortho_ret_type(
-    float32[:, :], 
-    uint32, 
-    uint32, 
-    float32[:], 
-    float32[:], 
-    float32[:, :], 
-)
-ortho_invalid_sig = ortho_ret_type(
-    float32[:, :], 
-    uint32, 
-    uint32,
-    float32[:], 
-    float32[:, :], 
-)
-batch_sig = cgs_ret_type(
-    float32[:, :], 
-    uint32, 
-    uint32,
-    float32[:],
-    float32[:],
-    float32[:,:],
-)
-
-cgs_sig = cgs_ret_type(
-    float32[:, :], 
-    uint32, 
-    uint32,
-    float32[:]
+_sig_tuple = namedtuple('signatures', ['valid32','valid64','invalid32','invalid64', 'cgs32', 'cgs64', 'offspring32', 'offspring64'] )
+S = _sig_tuple(
+    valid32 = types.Tuple((float32[:, :], float32, uint32))(float32[:, :], uint32, uint32, float32[:], float32[:], float32[:, :]),
+    valid64 = types.Tuple((float64[:, :], float64, uint32))(float64[:, :], uint32, uint32, float64[:], float64[:], float64[:, :]),
+    invalid32 = types.Tuple((float32[:, :], float32, uint32))(float32[:, :], uint32, uint32, float32[:], float32[:, :]),
+    invalid64 = types.Tuple((float64[:, :], float64, uint32))(float64[:, :], uint32, uint32, float64[:], float64[:, :]),
+    cgs32 = types.Tuple((float32[:, :], float32, uint32))(float32[:, :], uint32, uint32, float32[:]),
+    cgs64 = types.Tuple((float64[:, :], float64, uint32))(float64[:, :], uint32, uint32, float64[:]),
+    offspring32= float32[:, :](float32[:, :], uint32, uint32, uint32, float32[:], float32[:], float32[:, :], float32, float32),
+    offspring64= float64[:, :](float64[:, :], uint32, uint32, uint32, float64[:], float64[:], float64[:, :], float64, float64)
 )
 
 @guvectorize(
@@ -116,10 +84,7 @@ def _sum_and_count(new_basis, nvars, eps):
         e_sum += b*b
     return e_sum, count
 
-
-# def combined_basis_update(prev_basis, temp_basis, out_sum):
-    
-@njit(ortho_invalid_sig)
+@njit([S.invalid32, S.invalid64])
 def _invalid_e0_gs(
     parent_vars: np.ndarray, 
     nparents: np.uint32, 
@@ -134,14 +99,13 @@ def _invalid_e0_gs(
     Returns:
        tuple: (basis vectors, D, number of non zero vectors)
     """    
-    
-    D = np.float32(0)
-    num_non_zero = np.uint32(0)
+    D = 0
+    num_non_zero = 0
     zero_chain = np.uint8(0)
     first_valid_idx = 0
     
     for i in range(nparents-1):
-        d     = np.empty(nvars, dtype = np.float32)
+        d     = np.empty(nvars, dtype = parent_vars.dtype)
         d_nzero = np.empty(1, dtype = np.uint32)
         _vectorized_subtract(parent_vars[i], g, d, d_nzero)
         if d_nzero == nvars:
@@ -149,7 +113,7 @@ def _invalid_e0_gs(
         
         e_sum = 0.0
         zero_count = 0
-        temp_basis = np.zeros(nvars, np.float32)
+        temp_basis = np.zeros(nvars, parent_vars.dtype)
         # A valid previous basis has not been found yet 
         # (no quotient with reference dot product)
         if num_non_zero == 0: 
@@ -164,7 +128,8 @@ def _invalid_e0_gs(
             
             for prev in range(first_valid_idx, num_non_zero):
                 prev_basis = np.ascontiguousarray(e_eta[prev])
-                temp_basis -= temp_basis.dot(prev_basis) * prev_basis
+                sub = np.dot(temp_basis, prev_basis)
+                temp_basis -= sub * prev_basis
             
             e_sum, zero_count = _sum_and_count(temp_basis, nvars, EPSILON)
         
@@ -198,7 +163,7 @@ def _no_valid_basis(d, e0_hat, dot_d_e0, nvars, out_basis, out_sum):
         e_sum += d_sub * d_sub
     out_sum[0] = e_sum
 
-@njit(batch_sig)
+@njit([(S.valid32), (S.valid64)])
 def _batch_gs(
     parent_vars: np.ndarray, 
     nparent: np.uint32, 
@@ -208,18 +173,19 @@ def _batch_gs(
     e_eta: np.ndarray,
 ):
     
-    num_non_zero = np.uint32(0)
-    D = 0.0
-    EPS = np.finfo(np.float32).eps
-    e_eta = np.ascontiguousarray(e_eta)
     e0 = np.ascontiguousarray(e0)
     dot_reference = np.dot(e0, e0)
     if dot_reference < EPSILON:
         return _invalid_e0_gs(parent_vars, nparent, nvars, g, e_eta)
+    
     e0_hat = e0 / dot_reference
+    e_eta = np.ascontiguousarray(e_eta)
+    num_non_zero = np.uint32(0)
+    D = 0
+    EPS = np.finfo(np.float32).eps
     
     for i in range(nparent -1):
-        d  = np.empty(nvars, dtype = np.float32)
+        d  = np.empty(nvars, parent_vars.dtype)
         d_nzero = np.empty(1,np.uint32)
         _vectorized_subtract(parent_vars[i], g, d, d_nzero)
         if d_nzero[0] == nvars:
@@ -229,7 +195,7 @@ def _batch_gs(
         dot_d_first = np.dot(d, e0)
         temp = np.ascontiguousarray(d - (dot_d_first * e0_hat))
         if num_non_zero == 0: 
-            s = np.empty(1,np.float32)
+            s = np.empty(1,parent_vars.dtype)
             _no_valid_basis(d, e0_hat, dot_d_first, nvars, temp, s)
             e_sum = s[0]
         else:
@@ -251,7 +217,7 @@ def _batch_gs(
     return e_eta, D, num_non_zero
     
 
-@njit(ortho_valid_sig)
+@njit([S.valid32,S.valid64])
 def _modified_gs(
     parent_vars: np.ndarray, 
     nparent: np.uint32, 
@@ -267,8 +233,7 @@ def _modified_gs(
     Returns: (updated basis vectors, if basis vectors are non-zero, D, num_non_zero vectors)
     """    
     # construct matrix for all basis vectors
-    D = np.float32(0)
-    num_non_zero = 0
+
     e0 = np.ascontiguousarray(e0)
     dot_reference = np.dot(e0, e0)
     if dot_reference < EPSILON:
@@ -276,10 +241,12 @@ def _modified_gs(
     
     e0_hat = e0 / dot_reference
     e_eta = np.ascontiguousarray(e_eta)
+    num_non_zero = 0
+    D = 0
     zero_chain = np.uint8(0)
     
     for i in range(nparent-1):
-        d      = np.empty(nvars, dtype = np.float32)
+        d      = np.empty(nvars, parent_vars.dtype)
         d_nzero = np.empty(1,np.uint32)
         _vectorized_subtract(parent_vars[i], g, d, d_nzero)
         if d_nzero[0] == nvars:
@@ -291,7 +258,7 @@ def _modified_gs(
 
         # A valid previous basis has not been found yet
         if num_non_zero == 0: 
-            t = np.empty(1,np.float32)
+            t = np.empty(1,parent_vars.dtype)
             _no_valid_basis(d, e0_hat, dot_d_first, nvars, temp_basis, t)
             e_sum = t[0]
         else:
@@ -314,9 +281,9 @@ def _modified_gs(
     return e_eta, D, num_non_zero
 
 
-@njit(cgs_sig)
+@njit([S.cgs32,S.cgs64])
 def _classic_gs(
-    parent_vars: np.ndarray,
+    parent_vars,
     nparents,
     nvars,
     g):
@@ -344,18 +311,10 @@ def _classic_gs(
         col = non_zero_indices[i]
         out[i-start,:] = Q[:, col]
     return out, D, n_non_zero
-    
-def _apply_pcx(
-    parent_vars, e_eta, 
-    noffspring,
-    nvars,
-    D, num_non_zero, 
-    eta, zeta):
-    output = np.zeros((noffspring, nvars), np.float32)
-    pass
 
-@njit("float32[:, :](float32[:, :], uint32, uint32, uint32, float32[:], float32[:], float32[:, :], float32, float32)")
-def _orthogonalize_pcx(
+
+@njit([S.offspring32, S.offspring64])
+def _find_offspring_pcx(
     parent_vars:np.ndarray, 
     noffspring: np.uint32,
     k: np.uint32, 
@@ -373,11 +332,8 @@ def _orthogonalize_pcx(
     g = mean vector
     e0 reference basis vector
     """    
-    EPS = np.finfo(np.float32).tiny
-    D = np.float32(0)
-    is_all_zero = np.zeros(k-1, np.bool_)
-    num_non_zero = np.uint8(0)
-
+    D = 0
+    num_non_zero = np.uint32(0)
     if max(k,n) < 100 or n <= 10:
         e_eta, D, num_non_zero = _modified_gs(parent_vars, k, n, g, e0, e_eta)
     elif k == n:
@@ -385,40 +341,23 @@ def _orthogonalize_pcx(
     else:
         e_eta, D, num_non_zero = _batch_gs( parent_vars, k, n, g, e0, e_eta)
         
-    # Find all offspring variables
-    D /= np.float32(k - 1)
-    output = np.zeros((noffspring, n), np.float32)
-    use_eta = D >= EPS and num_non_zero > 0
-    for offspring in range(noffspring):
-        
-        # Apply zeta pertubation
-        reference_copy = np.empty(n, np.float32)
+    D /= (k - 1.0)
+    output = np.zeros((noffspring, n), parent_vars.dtype)
+    for offspring in range(noffspring): #zeta perturbation
         zeta_perturbation = np.random.normal(0.0, zeta) 
-        for var in range(n): #TODO vectorize
-            reference_copy[var] = parent_vars[-1, var]
-            reference_copy[var] += zeta_perturbation * e0[var]
-            
-        # Apply eta pertubation
-        if use_eta:
+        output[offspring] = parent_vars[-1] + zeta_perturbation * e0
+
+    if D >= EPSILON and num_non_zero > 0:
+        eta_sum = np.sum(e_eta[:num_non_zero], 0)
+        for offspring in range(noffspring): #eta perturbation
             eta_D = np.random.normal(0.0,eta) * D
-            for i in range(k-1):
-                if is_all_zero[i]:
-                    continue
-                for var in range(n):
-                    new_offspring_var = reference_copy[var] + (eta_D * e_eta[i,var])
-                    reference_copy[var] = new_offspring_var
- 
-        # Clip output variables
-        np.clip(reference_copy, 0.0, 1.0)
-        # for var in range(n):
-        #     new_offspring_var = reference_copy[var]
-        #     reference_copy[var] = max(0.0, min(new_offspring_var,1.0))  
-             
-        output[offspring] = reference_copy
+            output[offspring] += eta_D * eta_sum
             
+    np.clip(output, 0.0, 1.0, output)
     return output
 
-@njit("float32[:](float32[:], uint8, float32, float32, boolean)")
+@njit([float32[:](float32[:], types.uint32, float32, float32, boolean),
+      float64[:](float64[:], types.uint32, float64, float64, boolean)])
 def normalized_1d_pcx(
     parent_vars: np.ndarray, 
     noffspring: np.uint32, 
@@ -434,12 +373,11 @@ def normalized_1d_pcx(
     
    
     """   
-    # print(f"1d pcx: {parent_vars}") 
     k = len(parent_vars)
     if k == 0:
-        return np.zeros(noffspring, np.float32)
+        return np.zeros(noffspring, parent_vars.dtype)
     if k == 1:
-        return np.full(noffspring, parent_vars[0], np.float32)
+        return np.full(noffspring, parent_vars[0], parent_vars.dtype)
     
     g = sum(parent_vars) / k
     d = 0.0 # mean abs deviation
@@ -452,13 +390,13 @@ def normalized_1d_pcx(
             d_sign += deviation
             d += abs(deviation)
         if k > 2:
-            d /= np.float32(k - 1)
+            d /= (k - 1)
         e0 = parent_vars[-1] - g
         if d_sign == 0:
             d_sign = -1.0 if np.random.randint(2) else 1.0
         else:
             d_sign = -1.0 if d_sign < 0 else 1.0
-    offspring = np.empty(noffspring, dtype=np.float32)
+    offspring = np.empty(noffspring, parent_vars.dtype)
     
     for i in range(noffspring):
         if randomize:
@@ -472,7 +410,7 @@ def normalized_1d_pcx(
                     d_sign += deviation
                     d += abs(deviation)
             if k > 2: 
-                d /= np.float32(k - 1)
+                d /= (k - 1)
             if d_sign == 0:
                 d_sign = -1.0 if np.random.randint(2) else 1.0
             else:
@@ -505,10 +443,11 @@ def normalized_2d_pcx(
     noffspring = np.uint8(noffspring)
     nparents = np.uint8(parent_vars.shape[0])
     nvars = np.uint32(parent_vars.shape[1])
+    dtype = parent_vars.dtype
     if nparents == 0:
-        return np.zeros((noffspring, nvars), np.float32)
+        return np.zeros((noffspring, nvars), dtype)
     
-    output = np.empty((noffspring, nvars), np.float32)
+    output = np.empty((noffspring, nvars), dtype)
     if nparents == 1: 
         parent_row = parent_vars[0]
         for i in range(noffspring):
@@ -528,11 +467,10 @@ def normalized_2d_pcx(
         if randomize:
             rand_parent = np.random.randint(nparents)
             parent_vars[[rand_parent, -1]] = parent_vars[[-1, rand_parent]]
-        # e0 = np.zeros(nvars, np.float32, order = 'C')
-        # temp_out = np.zeros(1, np.uint32)
+
         e0, _ = _vectorized_subtract(parent_vars[-1], g)
-        e_eta = np.zeros((nparents-1, nvars), np.float32)
-        return _orthogonalize_pcx(parent_vars, noffspring, nparents, nvars, g, e0, e_eta, eta, zeta)
+        e_eta = np.zeros((nparents-1, nvars), dtype)
+        return _find_offspring_pcx(parent_vars, noffspring, nparents, nvars, g, e0, e_eta, eta, zeta)
     
     # Remember configuration of reference parents
     count_dict = {}
@@ -542,13 +480,12 @@ def normalized_2d_pcx(
     
     curr_row = 0
     for parent_idx, count in count_dict.items():
-        # print(f"count = {count}, parent_idx = {parent_idx}, curr_row = {curr_row}")
+        
         parent_vars[[parent_idx, -1]] = parent_vars[[-1, parent_idx]]
-        # e0 = np.zeros(nvars, np.float32, order = 'C')
-        # temp_out = np.zeros(1, np.uint32)
         e0, _=  _vectorized_subtract(parent_vars[-1], g)
-        e_eta = np.zeros((nparents-1,nvars), np.float32, order = 'C')
-        config_offspring = _orthogonalize_pcx(parent_vars, count, nparents, nvars, g, e0, e_eta, eta, zeta)
+        e_eta = np.zeros((nparents-1,nvars), dtype, order = 'C')
+        
+        config_offspring = _find_offspring_pcx(parent_vars, count, nparents, nvars, g, e0, e_eta, eta, zeta)
         output[curr_row:curr_row+count, :] = config_offspring
         curr_row += count
 
@@ -564,3 +501,21 @@ def normalized_2d_pcx(
 #     for b in range(nbasis):
 #         for n in range(nvars):
 #             temp_basis[n] -= coeffs[b] * prev_bases[b,n]
+
+# def _pcx_orig(p_matrix: list):
+#     k = len(p_matrix)
+#     nvars = len(p_matrix[0])
+#     g = [sum([p_matrix[i][j] for i in range(k)]) / k for j in range(nvars)] # mean of each var
+#     D = 0.0
+#     # basis vectors defined by parents
+#     e_eta = []
+#     prev = subtract(p_matrix[k-1], g)
+#     e_eta.append(prev) 
+#     for i in range(k-1): 
+#         d = subtract(p_matrix[i], g)
+#         if not is_zero(d):
+#             e = orthogonalize(d, e_eta)
+#             if not is_zero(e):
+#                 D += magnitude(e) #sqrt(dot(e,e))
+#                 e_eta.append(normalize(e))# put in [0,1] range
+#     return e_eta, D

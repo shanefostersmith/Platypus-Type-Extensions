@@ -2,11 +2,15 @@ import numpy as np
 import inspect
 from ._tools import _stepped_range_mutation, _type_equals, find_closest_val
 from bisect import bisect_left, bisect_right
-from ..core import CustomType, LocalMutator, LocalVariator, LocalGAOperator
+from ..core import CustomType, LocalMutator, LocalVariator
+from ..integer_methods.integer_methods import multi_int_crossover, int_cross_over, int_mutation, _cut_points
+from ..real_methods.numba_differential import (
+    real_mutation, differential_evolve, 
+    gu_differential_evolve, 
+    differential_evolve_with_probability,
+    DE_with_probability)
 from ..utils import (_min_max_norm_convert, _nbits_encode, int_to_gray_encoding, gray_encoding_to_int,
                      vectorized_to_norm, vectorized_from_norm, gu_normalize2D_1D)
-from ..integer_methods.integer_methods import multi_int_crossover, int_cross_over, int_mutation, _cut_points
-from ..real_methods.numba_differential import real_mutation, differential_evolve
 from ..real_methods.numba_pcx import normalized_2d_pcx, normalized_1d_pcx
 
 from platypus import Solution
@@ -458,16 +462,27 @@ class MultiRealPM(LocalMutator):
 class MultiDifferentialEvolution(LocalVariator):
     """A LocalVariator for a MultiRealRange
     
-    Applies differential evolution to individual floats 
+    Applies differential evolution to individual floats or to individual offspring
     """
     _supported_types = MultiRealRange
     _supported_arity = (4,4)
     _supported_noffspring = (1,1)
     __slots__ = ("real_crossover_rate", "real_step_size")
     
-    def __init__(self, real_crossover_rate = 0.1, real_step_size = 0.25):
+    def __init__(self, real_crossover_rate = 0.1, real_step_size = 0.25, all_or_none = True):
+        """
+        Args:
+            real_crossover_rate (float, optional): The frequency at which variables are evolved. Defaults to 0.1.
+            real_step_size (float, optional): _description_. Defaults to 0.25.
+            all_or_none (bool, optional): Defaults to True.
+            - If True, the probability gate applied to the offspring solution. If probability threshold is met, all floats are evolved.
+            - If False, the probability gate applied to all floats individually.
+            - Note, applying the probability gate to offspring, instead of individual floats, is faster.
+        """        
         self.real_crossover_rate = real_crossover_rate
         self.real_step_size = real_step_size
+        self.all_or_none = all_or_none
+        
     
     def evolve(self, custom_type: MultiRealRange, parent_solutions, offspring_solutions, variable_index, copy_indices, **kwargs):
 
@@ -478,19 +493,36 @@ class MultiDifferentialEvolution(LocalVariator):
         
         nreals = custom_type.ranges.shape[0]
         parent_vals = self.get_no_copy_variables(parent_solutions, variable_index, copy_indices[0])
-        offspring_range = offspring_solutions[0].variables[variable_index]
-        nreals = custom_type.ranges.shape[0]
-        irand = np.random.randint(nreals)
         
-        for i in range(nreals):
-            if i == irand or np.random.uniform() < crossover_rate:
-                new_val = differential_evolve(
-                    custom_type.ranges[i,0], custom_type.ranges[i,1], 
-                    parent_vals[0][i], parent_vals[1][i], parent_vals[2][i], 
-                    step_size)
-                offspring_range[i] = new_val 
+        if self.all_or_none:
+            if np.random.uniform() < crossover_rate:
+                offspring_solutions[0].variables[variable_index] = gu_differential_evolve(
+                    parent_vals[0], 
+                    parent_vals[1], 
+                    parent_vals[2],
+                    custom_type.ranges, 
+                    step_size
+                )
+                offspring_solutions[0].evaluated = False
+                
+        elif nreals <= 1000:
+            offspring_vars= offspring_solutions[0].variables[variable_index]
+            differential_evolve_with_probability(
+                offspring_vars, parent_vals[0], parent_vals[1], parent_vals[2], 
+                bounds = custom_type.ranges, step_size=step_size, crossover_rate=crossover_rate
+            )
+            offspring_solutions[0].evaluated = False
+            
+        else:
+            offspring_vars= offspring_solutions[0].variables[variable_index]
+            bit_gen = np.random.PCG64()
+            DE_with_probability(
+                bit_gen, offspring_vars,
+                parent_vals[0], parent_vals[1], parent_vals[2], 
+                bounds = custom_type.ranges, step_size=step_size, crossover_rate=crossover_rate
+            )
+            offspring_solutions[0].evaluated = False
         
-        offspring_solutions[0].evaluated = False
 
 class MultiPCX(LocalVariator):
     _supported_types = MultiRealRange
@@ -640,7 +672,7 @@ class RealListDE(LocalVariator):
     
     def __init__(self, crossover_rate = 0.25, step_size = 0.25):
         self.crossover_rate = crossover_rate
-        self.step_size = np.float32(step_size)
+        self.step_size = step_size
     
     def evolve(self, custom_type: RealList, parent_solutions, offspring_solutions, variable_index, copy_indices, **kwargs):
         do_crossover = kwargs.get("crossover")
@@ -654,7 +686,8 @@ class RealListDE(LocalVariator):
                 non_copy_parents[0],
                 non_copy_parents[1],
                 non_copy_parents[2],
-                step_size)
+                step_size,
+                True)
             true_val = find_closest_val(custom_type.reals, new_val)
             if true_val != offspring_solutions[0].variables[variable_index]:
                 offspring_solutions[0].variables[variable_index] = true_val

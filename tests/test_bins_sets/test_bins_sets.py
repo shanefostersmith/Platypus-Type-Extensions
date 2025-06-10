@@ -109,8 +109,7 @@ def test_weighted_set_crossover(weighted_set_with_crossover, nsolutions_crossove
     for i, p in enumerate(parent_sol):
         assert np.all(p.variables[0] == orig_parent_vars[i])
         
-        
-
+    
 def test_weighted_set_mutation(weighted_set_with_mutation, request):
     _, offspring_sol, _ = create_one_var_solutions(weighted_set_with_mutation)
     orig_directory = np.copy(offspring_sol)

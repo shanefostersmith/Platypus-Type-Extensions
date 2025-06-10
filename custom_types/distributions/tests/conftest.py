@@ -324,7 +324,8 @@ def create_one_var_solutions(custom_type: CustomType, nparents = 2, noffspring =
                      
         return parent_solutions, offspring_solutions, copy_indices
     
-    
+
+
     
     
         

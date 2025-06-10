@@ -1,7 +1,6 @@
 import pytest
 from custom_types.distributions.monotonic_distributions import *
 from ...distributions.tests.conftest import *
-from pyomo.util.infeasible import find_infeasible_constraints
 
 class TestFixedMapMonotonic:
     rtol = 1e-7
@@ -252,7 +251,7 @@ class TestFixedMapMonotonic:
             assert bijection.point_bounds.min_last_point < new_offspring_info.output_max_x or (
                 np.isclose(bijection.point_bounds.min_last_point, new_offspring_info.output_max_x, self.rtol, self.atol)
             )
-            
+
             
             
             
