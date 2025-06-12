@@ -97,18 +97,6 @@ class BoundsViewMixin:
         ub = self.dtype(ub_value) if ub_value is not None else self.upper_bound
         return max(np.spacing(abs(lb), dtype = self.dtype), np.spacing(abs(ub), dtype = self.dtype))
     
-    def get_first_point_bounds(self) -> tuple:
-        """Get the inclusive bounds of the first point: `(minimum first point, maximum first point)"""
-        return self.lower_bound, self.max_first_point
-    
-    def get_last_point_bounds(self) -> tuple:
-        """Get the inclusive bounds of the last point: `(minimum last point, maximum last point)"""
-        return self.min_last_point, self.upper_bound
-    
-    def get_full_bounds(self) -> tuple:
-        """Get the *inclusive* lower and upper bounds"""
-        return self.lower_bound, self.upper_bound
-    
     def get_conditional_separation_bounds(self, num_points: int) -> tuple[np.floating, np.floating]:
         """Find the separation bounds given a fixed number of points"""
         assert num_points > 1, "input must be greater than 1"

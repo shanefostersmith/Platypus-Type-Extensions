@@ -3,7 +3,7 @@ import numpy as np
 import copy
 from typing import Literal
 from custom_types.distributions import point_bounds, real_bijection
-from custom_types.distributions.ex_bijection_funcs import half_life_bijection
+from custom_types.distributions.example_bijections import half_life_bijection
 from custom_types.distributions.monotonic_distributions import *
 from custom_types.core import *
 
@@ -145,7 +145,7 @@ def half_life_real_bijection(half_life_bounds):
     )
     return bijection
 
-@pytest.fixture( params=[True, False], ids=lambda v: "ascending" if v else "descending", )
+@pytest.fixture(params=[True, False], ids=lambda v: "ascending" if v else "descending", )
 def distribution_sort(request):
     return request.param
 

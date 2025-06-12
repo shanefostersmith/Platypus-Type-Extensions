@@ -37,7 +37,7 @@ def ordered_y_bounds(bijection: RealBijection):
         return first_y, last_y, second_y, penult_y
     else:
         return last_y, first_y, penult_y, second_y
-    
+
 
 def sym_bound_adjustment(
     double_output_points,
@@ -73,7 +73,6 @@ def sym_bound_adjustment(
         curr_full_width = full_min_width if curr_full_width < full_min_width else full_max_width
         output_separation = curr_full_width / dtype(double_output_points - 1)
         in_separation_bounds = full_min_separation <= output_separation <= full_max_separation
-    
     
     if not in_point_bounds:
         if full_min_points == full_max_points:
@@ -120,7 +119,6 @@ def sym_bound_adjustment(
                     double_output_points -= 1
                 output_separation = width_bound / dtype(double_output_points - 1)
     
-     
     return double_output_points, output_separation
     
     

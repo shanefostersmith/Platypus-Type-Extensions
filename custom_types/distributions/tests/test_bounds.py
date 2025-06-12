@@ -8,12 +8,14 @@ from .conftest import *
 class TestPointBounds:
 
     def test_init(self, simple_point_bounds: PointBounds):
-        orig_lb, orig_ub = simple_point_bounds.get_full_bounds()
+        orig_lb = simple_point_bounds.lower_bound
+        orig_ub = simple_point_bounds.upper_bound
 
         bounds_view = simple_point_bounds.create_bounds_state()
         _bounds_tools._cascade_from_global(bounds_view)
         simple_point_bounds._apply_state(_bounds_tools.CascadePriority.GLOBAL, bounds_view)
-        new_lb, new_ub = simple_point_bounds.get_full_bounds()
+        new_lb = simple_point_bounds.lower_bound
+        new_ub = simple_point_bounds.upper_bound
         
         assert orig_lb == new_lb, "lower‐bounds array changed"
         assert orig_ub == new_ub, "upper‐bounds array changed"
@@ -26,7 +28,8 @@ class TestPointBounds:
     def test_cardinality_set(self, simple_point_bounds: PointBounds):
         orig_min_points = simple_point_bounds.min_points
         orig_max_points = simple_point_bounds.max_points
-        orig_lb, orig_ub = simple_point_bounds.get_full_bounds()
+        orig_lb = simple_point_bounds.lower_bound
+        orig_ub = simple_point_bounds.upper_bound
         bound_width = orig_ub - orig_lb
         eps = simple_point_bounds.get_separation_eps()
         print(f"EPS: {simple_point_bounds.get_separation_eps()}")
@@ -50,7 +53,8 @@ class TestPointBounds:
                 raise ValueError(f"An infeasible constraint found: {str(constr)}: {body_value}")
             simple_point_bounds.set_max_points(2)
             
-        new_lb, new_ub = simple_point_bounds.get_full_bounds()
+        new_lb = simple_point_bounds.lower_bound
+        new_ub = simple_point_bounds.upper_bound
         assert orig_lb == new_lb and orig_ub == new_ub
         assert simple_point_bounds.max_separation * (simple_point_bounds.min_points - 1) <= bound_width
         
@@ -63,7 +67,8 @@ class TestPointBounds:
     
     def test_first_last_bounds_set(self, simple_point_bounds: PointBounds, first_last_bound_type):
         orig_max_points = simple_point_bounds.max_points
-        orig_lb, orig_ub = simple_point_bounds.get_full_bounds()
+        orig_lb = simple_point_bounds.lower_bound
+        orig_ub = simple_point_bounds.upper_bound
         bound_width = orig_ub - orig_lb
         mid_point = (orig_ub + orig_lb) / simple_point_bounds.dtype(2.0)
         rtol = 1e-7 if simple_point_bounds.dtype == np.float64 else 1e-5
@@ -125,7 +130,8 @@ class TestPointBounds:
             raise ValueError(f"An infeasible constraint found: {str(constr)}: {body_value}")
         
     def test_separation_set(self, simple_point_bounds: PointBounds):
-        orig_lb, orig_ub = simple_point_bounds.get_full_bounds()
+        orig_lb = simple_point_bounds.lower_bound
+        orig_ub = simple_point_bounds.upper_bound
         bound_width = orig_ub - orig_lb
         orig_max_points = simple_point_bounds.max_points
         if np.isinf(orig_max_points):
@@ -177,7 +183,8 @@ class TestPointBounds:
         
     
     def test_fixed_width(self, simple_point_bounds: PointBounds):
-        orig_lb, orig_ub = simple_point_bounds.get_full_bounds()
+        orig_lb = simple_point_bounds.lower_bound
+        orig_ub = simple_point_bounds.upper_bound
         bound_width = orig_ub - orig_lb
         orig_max_points = simple_point_bounds.max_points
         dtype = simple_point_bounds.dtype

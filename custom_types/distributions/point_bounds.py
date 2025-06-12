@@ -484,7 +484,8 @@ class PointBounds(BoundsViewMixin):
         width = self.dtype(width)
         if width <= 0:
             raise ValueError(f"The input fixed_width {width} <= 0")
-        lb, ub = self.get_full_bounds()
+        lb = self.lower_bound
+        ub = self.upper_bound
         bound_width = ub - lb
         
         if width > bound_width:

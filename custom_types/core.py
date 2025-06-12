@@ -1,13 +1,14 @@
 import numpy as np
 import custom_types._tools as tools
 import contextvars
+from platypus import Solution, Problem, Variator, Mutation
+from platypus.types import Type as PlatypusType
 from warnings import warn
 from abc import ABCMeta, abstractmethod
+from multiprocessing import Value
 from collections.abc import Iterable
 from typing import Any, Type, Literal, Union, Generator
 from types import MethodType
-from platypus import Solution, Problem, Variator
-from platypus.types import Type as PlatypusType
 from copy import deepcopy
 from functools import lru_cache, reduce, wraps
 from enum import Enum
@@ -50,6 +51,7 @@ class CustomType(PlatypusType):
                  local_variator = None,
                  local_mutator = None,
                  encoding_memoization_type: Literal['cache', 'single'] | None  = None,
+                 post_decode: callable | None = None,
                  max_cache_size = 50):
         """
         Must provide at least one of *local_variator* or *local_mutator* 
@@ -85,6 +87,8 @@ class CustomType(PlatypusType):
         self._mut = None
         self.do_evolution = None
         self.do_mutation = None
+        # self.do_evolution = Value('b', False)
+        # self.do_mutation = Value('b', False)
         if local_variator is not None and local_mutator is not None:
             # print("here both")
             self.local_variator = LocalGAOperator(local_variator, local_mutator)
@@ -416,7 +420,7 @@ class LocalVariator(metaclass = ABCMeta):
         return f"{self.__class__.__name__}(types = {str(self._supported_types)}, arity = {ar}, noffspring = {of})"
     
     """
-    EXPERIMENTAL: 
+    Experimental: 
     - contextvars for automatic override of probability attributes occurs + concurrency safe
     - allows CustomTypes to share LocalVariators, but update probability attributes separately
     """
@@ -528,7 +532,6 @@ class LocalMutator(LocalVariator, metaclass = ABCMeta):
     #             _current_type.reset(type_token)
     #     cls.mutate = mutate_wrapper
         
-
 class GlobalEvolution(Variator):
     """
     An interface representing a global evolution. Streamlines evolution/crossover of Solution variables when various types exist.
@@ -553,6 +556,7 @@ class GlobalEvolution(Variator):
         self.noffspring = noffspring
         self._ignore_generics = ignore_generics
         self._indices_by_type = None
+        self._override_mutation = False
 
     def get_parent_deepcopies(
         self,
@@ -581,6 +585,10 @@ class GlobalEvolution(Variator):
         
         return out
     
+    def is_mutatable_type(self, problem_type: CustomType | PlatypusType) -> bool:
+        """Check if a CustomType or Platypus Type can be evolved given it's """
+        return (isinstance(problem_type, CustomType) and problem_type.can_evolve) or (not isinstance(problem_type, CustomType) and not self._ignore_generics)
+    
     def generate_types_to_evolve(self, problem: Problem) -> Generator[tuple[CustomType | PlatypusType, int]]:
         """
         Generate CustomType objects and their variable_index 
@@ -599,17 +607,23 @@ class GlobalEvolution(Variator):
         """  
         problem_types = problem.types
         for i, var_type in enumerate(problem_types):
-            # can_evolve = (isinstance(var_type, CustomType) and var_type.can_evolve) or (not isinstance(var_type, CustomType) and not self._ignore_generics)
-            # print(f"can {type(var_type)} evolve? {can_evolve}")
-            if (isinstance(var_type, CustomType) and var_type.can_evolve) or (not isinstance(var_type, CustomType) and not self._ignore_generics):
+            if self.is_mutatable_type(var_type):
                 yield var_type, i
     
     def generate_type_groups(self, problem: Problem) -> Generator[tuple[list[CustomType | PlatypusType], tuple[int]]]:
         self._store_problem_types(problem)
         problem_types = problem.types
         for indices in self._indices_by_type:
-            yield [problem_types[i] for i in indices], indices 
-    
+            out_indices = []
+            types = []
+            for i in indices:
+                curr_type = problem_types[i]
+                if self.is_mutatable_type(curr_type):
+                    types.append(curr_type)
+                    out_indices.append(i)
+                if types:
+                    yield types, out_indices 
+        
     def _store_problem_types(self, problem: Problem):
         """Store indices of a Problem's variable types, only does not recalculate if it exists."""
         if self._indices_by_type is not None:
@@ -622,8 +636,7 @@ class GlobalEvolution(Variator):
             indices_by_type.setdefault(type(var_type), []).append(i)
     
         self._indices_by_type = tuple(tuple(indices) for indices in indices_by_type.values())
-        
-                
+
     # @staticmethod
     # def get_encoded_placeholder(solution: Solution, variable_index: int):
     #     """ If the `solution.variables[variable_index]` is a PlaceholderPair, return the Placeholder solutions.variables[] encoded data.
@@ -660,7 +673,7 @@ class GlobalEvolution(Variator):
     #             placeholder = self.get_encoded_placeholder(par, i)
     #             if isinstance(placeholder, Placeholder):
     #                 par.variables[i] = placeholder.get_parent_reference()
-                 
+    
 
 class LocalGAOperator(LocalVariator):
     """Combine a `LocalVariator` with a `LocalMutator`. 
@@ -1007,7 +1020,6 @@ class LocalSequentialOperator(LocalVariator):
             swaps_left, do_mutation, **kwargs
         )
         
-    
     def _multi_strategy(
         self, 
         custom_type, parent_solutions: list[Solution], offspring_solutions: list[Solution], 
@@ -1022,14 +1034,12 @@ class LocalSequentialOperator(LocalVariator):
         unaltered_offspring = set() if num_altered == noffspring else set(range(noffspring)).difference(altered_offspring)
         previously_altered = altered_offspring.copy()
         
-        
         orig_offspring_indices = [i for i in altered_offspring]
         original_parents = set(range(nparents))
         for i in orig_offspring_indices:
             copied_from = copy_indices[i]
             if copied_from is not None:
                 original_parents.discard(copied_from)
-        # print(f"START_IDX: {start_idx}, First altered: {previously_altered}, Original Parents {original_parents}")
         
         multi_strategy = isinstance(self.offspring_selection, list)
         nvariators = len(self.variators)
@@ -1039,8 +1049,6 @@ class LocalSequentialOperator(LocalVariator):
             # Mutation
             if isinstance(curr_variator, LocalMutator) and do_mutation: 
                 curr_strategy = self.mutation_selection or self.offspring_selection[curr_idx]
-                # print(f"CURR IDX: {curr_idx}, MUT_STRATEGY: {curr_strategy}")
-                
                 if curr_strategy == 'all':
                     curr_variator.evolve(custom_type, parent_solutions, offspring_solutions, variable_index, copy_indices, **kwargs)
                     if num_altered != noffspring:
@@ -1077,8 +1085,6 @@ class LocalSequentialOperator(LocalVariator):
                 
                 # Select parents from 'altered offspring' and uncopied/unused 'parent_solutions', 
                 # Select offspring from both altered and unaltered offspring
-                # print(f"CURR IDX: {curr_idx}, STRATEGY: {curr_strategy}, VARIATOR {curr_variator.__class__.__name__}")
-                # print(f'unaltered_before: {unaltered_offspring}, original_parents_before {original_parents}')
                 if curr_strategy == 'rand':
                     new_parent_choices, original_parent_choices, altered_offspring_choices, unaltered_offspring_choices = tools._rand_selection(
                         orig_offspring_indices, original_parents, unaltered_offspring, 
@@ -1112,11 +1118,6 @@ class LocalSequentialOperator(LocalVariator):
                     offspring_solutions, variable_index, new_parent_choices, altered_offspring_choices
                 )
                 new_parents = [offspring_solutions[i] for i in new_parent_choices]
-                # track = None
-                # track_vars = None
-                # if len(new_parent_choices) > 0:
-                #     track = [i for i,p in enumerate(new_parent_choices) if any(a == p for a in altered_offspring_choices)]
-                #     track_vars = [deepcopy(offspring_solutions[new_parent_choices[t]].variables[0]) for t in track]
                 
                 tools._unaltered_overlap(
                     original_parents, 
@@ -1134,21 +1135,11 @@ class LocalSequentialOperator(LocalVariator):
                 # print(f"NUM OFFSPRING: {len(new_offspring)}")
                 # print(f"COPY_INDICES: {new_copy_indices}, (original {copy_indices})")
                 # print(f"POST_REPLACEMENTS: {post_replacements}")
-                assert len(new_offspring) == len(new_copy_indices), f"new_copy_indices: {new_copy_indices}, post_replacements {post_replacements}"
-                assert all(idx is None or idx < len(new_parents) for idx in new_copy_indices)
+                # assert len(new_offspring) == len(new_copy_indices), f"new_copy_indices: {new_copy_indices}, post_replacements {post_replacements}"
+                # assert all(idx is None or idx < len(new_parents) for idx in new_copy_indices)
                  
                 # Pass new offspring into variator's evolve, do variable replacements + other updates
                 curr_variator.evolve(custom_type, new_parents, new_offspring, variable_index, new_copy_indices, **kwargs)
-                # if n_altered_choices > 0:
-                #     str_after = ""
-                #     for k in range(n_altered_choices):
-                #         str_after += f"{[new_offspring[k].variables[variable_index]]}, "
-                #     print(f"OFFSPRING_AFTER_A: {str_after}\n")
-                
-                # if track is not None:
-                #     for t, var in zip(track, track_vars):
-                #         assert np.all(var == new_parents[t].variables[variable_index])
-        
                 tools._variable_replacement(offspring_solutions, new_offspring, post_replacements, variable_index)
                 if unaltered_offspring_choices:
                     unaltered_offspring.difference_update(unaltered_offspring_choices)

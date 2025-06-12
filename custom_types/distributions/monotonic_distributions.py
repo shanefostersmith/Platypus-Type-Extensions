@@ -19,6 +19,7 @@ import numpy as np
 import copy
 from collections.abc import Iterable
 from collections import namedtuple
+from typing import Literal
 from .real_bijection import RealBijection
 from .point_bounds import PointBounds, bound_tools
 from ._distribution_tools import DistributionInfo
@@ -98,77 +99,23 @@ class MonotonicDistributions(CustomType):
         local_mutator = None,
         ordinal_maps = False,
         max_points: int = 1000,  
-        sort_ascending = True):
+        sort_ascending = True,
+        cache_type: Literal['cache', 'single'] | None = None,
+        max_cache_size = 25):
         """
-        Args
-        --------
-        `
-        
-        **mappings** (Iterable[RealBijection]) An iterable of *RealBijection* objects:
-        
-        - The set of candidate distribution (that are monotonic)
-               
-        - The inverse mapping function and full 'x'-bounds are required to be set
-        
-        **ordinal_maps**: Defaults to False.
+        Args:
+            mappings (Iterable[RealBijection]):  An iterable of *RealBijection* objects with the inverse function set (see RealBijection)
+            local_variator (LocalVariator, optional): A compatible LocalVariator for MonotonicDistributions. Defaults to None.
+            local_mutator (_type_, optional): A compatible LocalMutator for MonotonicDistributions. Defaults to None.
+            ordinal_maps (bool, optional): Indicates that the RealBijection objects are inputted in some sort of order. Defaults to False.
+            max_points (int, optional): If a *RealBijection*'s max_points bound not already set, this default value will be used. Defaults to 1000.
+            sort_ascending (bool, optional): _description_. Indictes whether to return distributions in ascending or descending order. Defaults to True.
+            cache_type (Literal[&#39;cache&#39;, &#39;single&#39;] | None, optional): *experimental*. Defaults to None.
 
-        - Indicates that the RealBijection objects are inputted in some sort of order
-        
-        - This order could be related to any property of the candidate distributions or their bounds (described by the *RealBijection* objects)
-            
-        **max_points** (int, optional): A default maximum number of samples in an output.  Defaults to 1000. 
-        
-        - If a *RealBijection*'s max_points boundis already set, then that value will be used. Otherwise, this default value will be used.
-            
-        **sample_count_mutation_probability** (float, optional): Defaults to 0.1. Probability of mutating the number of points in the distribution.
-        
-        - If a map's minimum number of points equals the map's maximum number of points, this is the probability of a "width" mutation 
-            (by mutating the distance between adjacent points)
-        
-        **sample_count_mutation_limit** (int, optional): Defaults to None. A limit to the the number of samples that can be added to or removed from a distribution during a sample count mutation. 
-        
-        - If a map's minimum number of points equals the map's maximum number of points, then this defines a limit on a"width" mutation:
-            *width change limit* = *(x_max - x_min) / (number of points)*  * *sample_count_mutation_limit*
-        
-        **shift_mutation_probability** (float, optional): Defaults to 0.1. Probability of shifting entire distribution along the x-axis. 
-        
-        **shift_alpha** (float, optional): Defaults to 1.5. A parameter for `np.random.beta(shift_alpha, shift_beta)`. Alters distribution of shift mutations. 
-        
-        **shift_beta** (int, optional): Defaults to 6. A parameter for `np.random.beta(shift_alpha, shift_beta`. Alters distribution of shift mutations. 
-        
-        **mapping_mutation_probability** (float, optional): Defaults to 0.1. Probability of mutating mapping functions 
-            
-        - i.e. applying relative x values of a previous solution to new distribution
-        
-        - May also be informed by previous y values if *y-based crossover* is set to True, or the order of the maps, if *ordinal_maps* is set to True
+        Raises:
+            ValueError: If the inverse function of any RealBijection map is not set
 
-        **randomization_probability** (float, optional): Defaults to 0.0. Probability that a distribution will be completely randomized during a mutation (aka. probability of calling `rand()` during mutation). 
-        
-        **global_mutation_probability**: (float, optional): Defaults to 0.0. 
-        
-        - If 0.0, sample count, shift and mapping mutations occur independently and according to their individual probability values 
-        
-            - (see _sample_count_mutation_probability_ , _shift_mutation_probability_ , _mapping_mutation_probability_)
-        
-        - If > 0, then sample count, shift and mapping mutations will happen simultanously (all or none mutation). 
-        
-            - If a sample count, shift or mapping mutation's individual probability is 0.0, that mutation type will not occur regardless of the *global_mutation_probability*
-            
-        - Randomizations are always independent (see *randomization_probability*).
-        
-        **sort_ascending** (bool, optional): Defaults to True. Indictes whether to return distribution samples in ascending or descending order
-        
-        **variator_overrides**: Optional parameters overriding any variator 
-
-        - Parameter keywords may include `step_size`, `eta`, `zeta`, `real_method`
-        
-        - These parameters may also be passed into `evolve()` directly from a `GlobalEvolution` object
-        
-            - Parameters passed directly to `evolve()` will override initialization values
-        
-        - See `evolve()` for more details
-                
-        """ 
+        """        
         self.map_suite = []
         self.num_functions = 0
         self.global_min_points = np.inf
@@ -182,8 +129,6 @@ class MonotonicDistributions(CustomType):
         for i, bijection in enumerate(mappings): 
             assert isinstance(bijection, RealBijection), f"Element {i} is not a RealBijection object."
             x_bounds = bijection.point_bounds
-            if x_bounds.lower_bound >= x_bounds.upper_bound:
-                raise ValueError(f"RealBijection {i} has the same value for the minimum and maximum 'x' bound.")
             if bijection.inverse_function is None:
                 raise ValueError(f"RealBijection {i} does not have an inverse function set")
             bijection.set_raise_execution_errors(True)
@@ -224,7 +169,11 @@ class MonotonicDistributions(CustomType):
 
         self.sort_ascending = sort_ascending
         self.ordinal_maps = ordinal_maps
-        super().__init__(local_variator=local_variator, local_mutator=local_mutator)
+        super().__init__(
+            local_variator=local_variator, 
+            local_mutator=local_mutator,
+            encoding_memoization_type=cache_type,
+            max_cache_size=max_cache_size)
     
     def _add_max_points(self, bounds: bound_tools.BoundsState, default_max_points: int):
         """Adds default max points when using a BoundsState"""
@@ -307,7 +256,6 @@ class MonotonicDistributions(CustomType):
     def __str__(self):
         return f"Monotonic Sets: ({self.num_functions})"
 
-    
 class FixedMapConversion(LocalMutator):
     """A LocalMutator for MonotonicDistributios (and subclasses)
     

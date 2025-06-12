@@ -3,7 +3,7 @@ import numpy as np
 import custom_types.real_methods.numba_pcx as pcx
 from tests.conftest import noffspring
 from tests.test_real_int.conftest import p_matrix, _batch_pcx, _mod_pcx, _numpy_pcx
-from pytest_mock import MockerFixture
+# from pytest_mock import MockerFixture
 
 class TestNormalizedPCX:
     
@@ -42,7 +42,7 @@ class TestNormalizedPCX:
         assert np.all(out >= 0.0)
         assert np.all(out <= 1.0)
 
-    def test_zeros_empty(self, mocker: MockerFixture):
+    def test_zeros_empty(self): #mocker: MockerFixture):
         
         # remove from njit decorators
         # orig_invalid = pcx._invalid_e0_gs.py_func
