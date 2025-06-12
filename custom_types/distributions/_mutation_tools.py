@@ -172,10 +172,8 @@ def separation_mutation(
     flt_points = x_bounds.dtype(curr_num_points - 1)
     dist_from_max_sep = max(0.0, x_bounds.max_separation - separation) * flt_points
     dist_from_min_sep = max(0.0, separation - x_bounds.min_separation) * flt_points
-    # print(f"dist_min_sep {dist_from_min_sep}, dist_max_sep {dist_from_max_sep}")
     dist_from_max = max(0.0, min(true_max_width - curr_width, dist_from_max_sep))
     dist_from_min = max(0.0, min(curr_width - true_min_width, dist_from_min_sep))
-    # print(f"dist_from_min = {dist_from_min}, dist_from_max = {dist_from_max}")
     
     
     # Determine maximum width increase on each 'side' of current distribution
@@ -196,27 +194,20 @@ def separation_mutation(
     if width_change == 0:
         return output_min_x, output_max_x, None
     
-    print(f"width_change: {width_change}, min_side_dist {min_side_dist}, max_side_dist {max_side_dist}")
+    # print(f"width_change: {width_change}, min_side_dist {min_side_dist}, max_side_dist {max_side_dist}")
     
     new_out_min =  output_min_x
     new_out_max =  output_max_x
     abs_width_change = abs(width_change)
     if min_side_dist <= 0:
-        print('here max side')
         new_out_max += width_change
     elif max_side_dist <= 0:
-        print('here min side')
         new_out_min -= width_change
     elif abs_width_change <= min_side_dist and abs_width_change <= max_side_dist:
-        print('here both')
         one_side_change = np.random.uniform() * width_change
-        print(f"to_min {one_side_change}")
-        print(f"to_max {width_change - one_side_change}")
         new_out_min -= one_side_change 
         new_out_max += (width_change - one_side_change)
     else: # Higher change of give more weight to the side w/ more room
-        print('here proportional')
-        
         to_min = 0
         to_max = 0
         if min_side_dist > max_side_dist:
@@ -229,9 +220,7 @@ def separation_mutation(
             rand_proportion = np.random.uniform(min_side_proportion, 1.0)
             to_max = min(abs_width_change * rand_proportion, max_side_dist) 
             to_min = min(abs_width_change - to_max, min_side_dist) 
-        
-        print(f"to_min {to_min}, to_max {to_max}")
-
+            
         if width_change < 0:
             new_out_min += to_min
             new_out_max -= to_max
@@ -314,7 +303,7 @@ def count_mutation(all_x_bounds: BoundsViewMixin,
         max_removal_from_max = 0
         if output_max_x >= min_last_x + separation:
             max_removal_from_max = min(total_max_removal, (output_max_x - min_last_x) // separation)
-
+        
         if max_removal_from_min and (not max_removal_from_max or np.random.randint(2)):
             point_diff = -1 if max_removal_from_min == 1 else -1*np.random.randint(1, max_removal_from_min + 1)
             return point_diff, True, None

@@ -121,8 +121,8 @@ class BoundsViewMixin:
         if self.max_first_point >= self.min_last_point:
             out_min_separation = self.min_separation
         else:
-            out_min_separation = (self.max_first_point - self.min_last_point) / denom
-        
+            out_min_separation = (self.min_last_point - self.max_first_point) / denom
+
         max_width = self.true_max_width
         out_max_separation = max(out_min_separation, max_width / denom)
         return out_min_separation, out_max_separation
@@ -147,7 +147,7 @@ class BoundsViewMixin:
         if not np.isinf(max_points):
             max_points = min(self.max_points, max_points)
         min_width = self.true_min_width
-        min_points = int(ceil(min_width / denom + 1))
+        min_points = max(self.min_points, min(self.max_points, int(ceil(min_width / denom + 1.0))))
         max_points = max(max_points, min_points)
         return min_points, max_points
     

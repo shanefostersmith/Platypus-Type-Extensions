@@ -375,8 +375,14 @@ class PointBounds(BoundsViewMixin):
                     except: # overflow when max_points large
                         pass
                     
+            min_separation = max(min_separation, eps)
+            self.model.min_separation = self.dtype(min_separation)
+            self.model.max_separation = max(min_separation, self.max_separation)
+            self._cascade_from(CascadePriority.SEPARATION, 'min')
+            return
+                    
         elif min_separation > max_width:
-            raise ValueError(f"Input min_separation > max_width {max_width}")
+            raise ValueError(f"Input min_separation {min_separation} > max_width {max_width}")
         elif min_separation <= 0:
             raise ValueError(f"Input min_separation <= 0")
         else:

@@ -39,106 +39,122 @@ class SymmetricDistributions(MonotonicDistributions):
         x_min, max_first_x = all_bounds.first_point_bounds
         min_last_x, x_max = all_bounds.last_point_bounds
         
-        
-        if max_first_x == x_min and min_last_x == x_max: # have to choose separation after points
+        # resolve discrepencies between full width bounds and half-width bounds
+        full_min_separation, full_max_separation = bijection._full_separation_bounds
+        true_min_separation = min(all_bounds.max_separation, max(full_min_separation, all_bounds.min_separation))
+        true_max_separation = max(all_bounds.min_separation, min(full_max_separation, all_bounds.max_separation))
+         
+        if max_first_x == x_min and min_last_x == x_max: 
             width = x_max - x_min
-            true_min_points, true_max_points = all_bounds.get_conditional_cardinality_with_width(width)
-            output_points = true_min_points if true_min_points == true_max_points else np.random.int(true_min_points, true_max_points)
-            separation = width / all_bounds.dtype(output_points - 1)
-            output_min_x = x_min
-            output_max_x = x_max
+            true_min_points = None
+            true_max_points = None
+            if all_bounds.min_points == all_bounds.max_points:
+                true_min_points = all_bounds.min_points
+                true_max_points = all_bounds.min_points
+            else:
+                true_max_points = floor(width / true_min_separation + 1.0)
+                true_min_points = min(true_max_points, ceil(width / true_max_separation + 1.0))
+                
+            if true_min_points == true_max_points:
+                output_separation = width / all_bounds.dtype(true_min_points - 1)
+                output_points = true_min_points
+            else:
+                output_points = np.random.randint(true_min_points, true_max_points + 1)
+                output_separation = width / all_bounds.dtype(output_points - 1)
+                
             return  DistributionInfo(
-                map_index = rand_function_idx,
-                num_points = output_points,
-                separation =  separation ,
-                output_min_x = output_min_x,
-                output_max_x = output_max_x
+                map_index=rand_function_idx,
+                output_min_x= x_min,
+                output_max_x= x_max,
+                separation= output_separation,
+                num_points= output_points 
             )
-        output_min_x = None
-        output_max_x = None
+        
+        output_min_x = bijection.center_x if bijection.right_side_provided else None
+        output_max_x = None if bijection.right_side_provided else bijection.center_x
         output_points = None
-            
-        #TODO: Find bounds
+        output_separation = None
+        if true_min_separation == true_max_separation:
+            output_separation = true_max_separation
+            true_min_points, true_max_points = all_bounds.get_conditional_cardinality_bounds(output_separation)
+            output_points = true_min_points if true_min_points == true_max_points else np.random.randint(true_min_points, true_max_points + 1)
+        else:
+            true_min_points = max(all_bounds.min_points, min(ceil(all_bounds.true_min_width / true_max_separation + 1.0), all_bounds.max_points))
+            true_max_points = min(all_bounds.max_points, max(all_bounds.min_points, floor(all_bounds.true_max_width  / true_min_separation + 1.0)))
+            output_points = true_min_points if true_min_points == true_max_points else np.random.randint(true_min_points, true_max_points + 1)
+            new_min_separation, new_max_separation = all_bounds.get_conditional_separation_bounds(output_points)
+            new_min_separation = max(true_min_separation, new_min_separation)
+            new_max_separation = min(true_max_separation, new_max_separation)
+            output_separation = np.random.uniform(new_min_separation, new_max_separation)
+        
+        new_width = all_bounds.dtype(output_points - 1) * output_separation
+        assert not new_width > all_bounds.bound_width
+        if bijection.right_side_provided:
+            output_min_x = bijection.center_x 
+            output_max_x = output_min_x + new_width
+        else:
+            output_max_x = bijection.center_x 
+            output_min_x= output_max_x - new_width
         
         return DistributionInfo(
             map_index = rand_function_idx,
-            num_points = output_points,
-            separation =  separation ,
             output_min_x = output_min_x,
-            output_max_x = output_max_x
+            output_max_x = output_max_x,
+            num_points = output_points,
+            separation =  output_separation,
         )
     
     def encode(self, value):
         
         y_distribution, map_idx = value
         bijection: SymmetricBijection = self.map_suite[map_idx]
-        
         num_points = len(y_distribution)
         center_included = num_points % 2
         half_points = num_points // 2 + center_included
-        assert half_points >= bijection.point_bounds.min_points, f"Too few points in current distribution ({num_points}) , minimum is {bijection.point_bounds.min_points})"
-        first_y = None
-        last_y = None
+        output_min_x = None
+        output_max_x = None
+        separation = None
         if bijection.right_side_provided:
-            first_y = y_distribution[-half_points] #TODO CHECK
-            last_y = y_distribution[-1]
+            first_idx = num_points // 2
+            if center_included:
+                output_min_x = bijection.center_x
+            else:
+                output_min_x = bijection.fixed_inverse_map(y_distribution[first_idx])
+            second_x = bijection.fixed_inverse_map(y_distribution[first_idx+1])
+            output_max_x = bijection.fixed_inverse_map(y_distribution[-1])
+            separation = abs(second_x - output_min_x)
         else:
-            first_y = y_distribution[0]
-            last_y = y_distribution[half_points - 1]
+            first_idx = num_points // 2 if center_included else num_points // 2 - 1
+            if center_included:
+                output_max_x = bijection.center_x
+            else:
+                output_max_x = bijection.fixed_inverse_map(y_distribution[first_idx])
+            second_x = bijection.fixed_inverse_map(y_distribution[first_idx-1])
+            output_min_x = bijection.fixed_inverse_map(y_distribution[0])
+            separation = abs(second_x - output_max_x)
             
-        first_idx_x = bijection.fixed_inverse_map(first_y)
-        last_idx_x = bijection.fixed_inverse_map(last_y) 
-        assert not (first_idx_x is None or last_idx_x is None), "The inverse function returned None values"
-        assert first_idx_x != last_idx_x, "The first 'x' value in current distribution equals the last 'x' value"
-        
-        output_min_x = min(first_idx_x, last_idx_x)
-        output_max_x = max(first_idx_x, last_idx_x)
-        separation = (output_max_x - output_min_x) / bijection._return_type(half_points - 1)
-        
-        distribution_info = DistributionInfo(
+        # resolve discrepencies between half and full bounds
+        half_width = output_max_x - output_min_x
+        if half_points > bijection.point_bounds.max_points:
+            half_points = bijection.point_bounds.max_points
+        elif half_points < bijection.point_bounds.min_points:
+            half_points = bijection.point_bounds.min_points
+        elif separation > bijection.point_bounds.max_separation: # decrease sep, increase points
+            half_points = max(bijection.point_bounds.min_points, floor(half_width / bijection.point_bounds.max_separation + 1.0))
+        elif separation < bijection.point_bounds.min_separation: # increase sep, decrease points
+            half_points = min(bijection.point_bounds.max_points, ceil(half_width / bijection.point_bounds.min_separation + 1.0))
+        else:
+            return DistributionInfo(
+                map_index = map_idx,
+                num_points = half_points,
+                separation = separation,
+                output_min_x = output_min_x,
+                output_max_x = output_max_x)
+            
+        separation = max(bijection.point_bounds.min_separation, min(bijection.point_bounds.max_separation, half_width / bijection.point_bounds.dtype(half_points - 1)))
+        return DistributionInfo(
             map_index = map_idx,
-            num_points = num_points,
+            num_points = half_points,
             separation = separation,
             output_min_x = output_min_x,
             output_max_x = output_max_x)
-        
-        return distribution_info
-    
-# def _count_mutation(self, 
-#                     bijection: SymmetricBijection,
-#                     output_min_x, output_max_x, 
-#                     curr_num_points):
-#     """
-#     Remove or add points from distribution. 
-    
-#     No change to width (unlike monotonic case)
-
-#     Returns:
-#         tuple(int, bool): (point_diff, diff_at_min_x, separation_change)
-#             i.e. (number points added/removed, if adding or removing points from start x or last x, if changed separation instead of width)
-#     """        
-    
-    
-#     all_x_bounds: PointBounds = bijection.get_all_x_bounds()
-#     curr_width = output_max_x - output_min_x
-
-#     true_min_points, true_max_points = all_x_bounds.get_conditional_points_with_width(curr_width)
-#     max_addition = max(0, true_max_points - curr_num_points)
-#     max_subtraction = max(0,curr_num_points - true_min_points)
-#     if self.sample_count_mutation_limit:
-#         max_addition = min(self.sample_count_mutation_limit, max_addition)
-#         max_subtraction= min(self.sample_count_mutation_limit, max_subtraction)
-        
-#     point_diff = 0
-#     if max_subtraction and (not max_addition or np.random.randint(2)):
-#         point_diff = 1 if max_subtraction == 1 else np.random.randint(1, max_subtraction + 1)
-#         return -point_diff, curr_width  / all_x_bounds.dtype(curr_num_points - point_diff - 1)
-#     elif max_addition:
-#         point_diff = 1 if max_addition == 1 else np.random.randint(1, max_addition + 1)
-#         return point_diff, curr_width  / all_x_bounds.dtype(curr_num_points + point_diff - 1)
-#     return 0, None
-    
-    
-    
-
-    

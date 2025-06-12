@@ -18,7 +18,7 @@ def fixed_subset_swap(
         parent_inactive_idx = parent_inactive_indices[i]
         if (offspring_directory[parent_inactive_idx] != -1 and # offspring not inactive at feature where parent is inactive
             offspring_directory[offspring_inactive_idx] == -1 and 
-            i == irand or np.random.uniform() < single_swap_probability):
+            (i == irand or np.random.uniform() < single_swap_probability)):
             
             temp = offspring_directory[parent_inactive_idx]
             offspring_directory[parent_inactive_idx] = -1
@@ -223,7 +223,6 @@ def subset_mutation(subset_size: int, num_inactives: int, directory: np.ndarray)
     (worst case O(n), best O(1))
     
     TODO: Case where subset size << num_inactives"""
-    # print("here subset")
     if num_inactives == 0:
         return
     
