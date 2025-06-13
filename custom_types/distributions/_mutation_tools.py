@@ -135,6 +135,7 @@ def map_conversion_y_based(
     new_separation = new_width / new_x_bounds.dtype(new_num_points - 1)
     return new_min_x, new_max_x, new_separation, new_num_points
 
+np.random.seed(123)
 def shift_mutation(x_bounds: BoundsViewMixin, output_min_x, output_max_x, shift_alpha, shift_beta, return_type):
         max_negative_shift = max(0.0, min(output_min_x - x_bounds.lower_bound, output_max_x - x_bounds.min_last_point))
         max_positive_shift = max(0.0, min(x_bounds.upper_bound - output_max_x , x_bounds.max_first_point - output_min_x))
@@ -310,16 +311,17 @@ def count_mutation(all_x_bounds: BoundsViewMixin,
         elif max_removal_from_max :
             point_diff = -1 if max_removal_from_max == 1 else -1*np.random.randint(1, max_removal_from_max + 1)
             return point_diff, False, None
-        
+        # print(f'did not change subtract: {max_removal_from_min}, {max_removal_from_min}')
         return 0, False, None
     
     elif addition_valid:
         # Check how many points can be added in total
         total_max_addition = true_max_points - curr_num_points
+       
         if count_limit:
             total_max_addition= min(total_max_addition , count_limit)
         total_max_addition = min(total_max_addition, (curr_width - true_min_width) // separation)
-        
+        # print(f"total_max_addition: {total_max_addition} for curr_width {curr_width} and true_min_width {true_min_width} and separation {separation}")
         # Check how many points can be added from each side
         max_addition_to_min = 0
         if output_min_x - separation >= x_min:
@@ -334,7 +336,6 @@ def count_mutation(all_x_bounds: BoundsViewMixin,
         elif max_addition_to_max:
             point_diff = 1 if max_addition_to_max == 1 else np.random.randint(1, max_addition_to_max + 1)
             return point_diff, False, None
-        
         return 0, True, None
     
     return 0, False, None

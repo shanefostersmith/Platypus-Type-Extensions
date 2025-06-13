@@ -1,6 +1,6 @@
 import numpy as np
 from ..core import CustomType, GlobalEvolution
-from .generic_local import _get_2D_numpy_integer_array
+from ._generic_type_tools import _get_2D_numpy_integer_array
 from ..integer_methods.integer_methods import multi_int_crossover
 from ..real_methods.numba_differential import differential_evolve
 from platypus import Solution, Integer, Real
@@ -32,10 +32,9 @@ class GlobalDifferential(GlobalEvolution):
                 
                 If True, only CustomType variables will be evolved.
             
-            generic_step_size: Controls the   Defaults to None.
+            generic_step_size: Controls the distribution of variation for Platypus Reals.  Defaults to 0.25.
             
-            generic_crossover_rate: If True, the *step_size* parameter is used only for Platypus Real types. If False, the *step_size* is also passed to CustomTypes. Defaults to False
-                Note that, CustomTypes and the Real method also have default values (usually 0.25). 
+            generic_crossover_rate: The crossover rate for Platypus Reals and Integers types. Defaults to 0.25
         """        
         
         self.generic_crossover_rate = 0

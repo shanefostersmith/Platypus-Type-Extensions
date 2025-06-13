@@ -46,6 +46,35 @@ class TypeTuple(tuple):
     def __str__(self):
         return  ", ".join(t.__name__ for t in self)
 
+def _deep_eq(d1, d2):
+    if type(d1) != type(d2):
+        return False
+    if isinstance(d1, np.ndarray) and isinstance(d2, np.ndarray):
+        return d1.shape == d2.shape and np.all(d1 == d2)
+    if isinstance(d1, Sequence) and isinstance(d2, Sequence):
+        if len(d1) != len(d2):
+            return False
+        elif isinstance(d1, str):
+            return d1 == d2
+        return all(_deep_eq(x, y) for x, y in zip(d1, d2))
+    return d1 == d2
+
+def _single_memo_encode(self, decoded):
+    """For remembering encodings from decoding"""
+    if self._enc_temp is None:
+        return self._mem_encode(decoded)
+    else:
+        encoding = self._enc_temp[0]
+        # print(f"     same?: {_deep_eq(decoded, self._enc_temp[1])}")
+        self._enc_temp = None
+        return encoding
+
+def _single_memo_decode(self, encoded):
+    """For remembering encodings from decoding"""
+    decoded = self._mem_decode(encoded)
+    self._enc_temp = (encoded, decoded)
+    return decoded
+
 def _shallow_copy_solution(sol: Solution, variable_idx: int):
     """Shallow copy a Solution and its FixedLengthArray, deepcopy the variable to mutate"""
     sol_copy = copy(sol)

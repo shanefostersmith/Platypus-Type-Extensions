@@ -4,7 +4,6 @@ from numba import (
     njit, guvectorize, 
     float32, float64, boolean,
     prange, typeof)
-from ..utils import _float32_min_max_norm
 
 
 @njit

@@ -6,7 +6,7 @@ def _type_equals(elem1, elem2):
         """Safe equals for different types"""
         return type(elem1) == type(elem2) and elem1 == elem2  
     
-@njit
+# @njit
 def _stepped_range_mutation(lower_bound, step_value, max_step, curr_value):
     curr_step = (curr_value - lower_bound) // step_value
     if curr_step == max_step:
@@ -29,12 +29,3 @@ def find_closest_val(real_list, new_val):
         return real_list[idx]
     else:
         return real_list[idx - 1]
-
-def _group_by_copy(copy_indices) -> dict[int, list[int]]:
-    unique_copies = {} 
-    for i, copy_idx in enumerate(copy_indices):
-        if copy_idx is None:
-            unique_copies.setdefault(-1, []).append(i)
-        else:
-            unique_copies.setdefault(copy_idx, []).append(i)
-    return unique_copies

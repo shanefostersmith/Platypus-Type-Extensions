@@ -1,35 +1,26 @@
 # Future work / areas for exploration: 
-    # 1. Batch GPU computing of output distributions (CUDA and Metal Shading)
-    # 2. Unpacking mutations / crossovers into individual LocalMutation and LocalEvolutions
-    # 3. Decorators/context managers for mappings that can handle vectorized operations
-    # 4. More sophisticated caching of known x -> y mappings for full and partial arrays
-    # 5. Optimizing the parameters of a map as well (probably a separate class)
-    # 6. Multi-dimensional distributions (direction bounds instead of point bounds, covariance matrices, etc.)
-    # 7. Decrease of probability terms over generations 
-        # Different rates of decrease for different types of crossover/mutation, or different elements of distributions
-    # 8. Gradual tightening of PointBounds over generations
-    # 9. Other potential optimizations (
-        # With only one map input, can bypass all of the bounds checks (no conversions). For many maps, check if all x or y bounds are the same at initialization
-        # Greater use a Numba decorators (prange, stencils, parallel, etc.) and standardizing their flags
+    # - Batch GPU computing of output distributions (CUDA and Metal Shading)
+    # - Decorators/context managers for mappings that can handle vectorized operations
+    # -  More sophisticated caching of known x -> y mappings for partial arrays
+    # - Optimizing the parameters of a map as well (probably a separate class)
+    # - Multi-dimensional distributions (direction bounds instead of point bounds, covariance matrices, etc.)
+    # - Gradual tightening of PointBounds over generations
+    # - Other potential optimizations 
         # Using elements known numeric optimizations for very large arrays, parameter optimization, or semi-guidance (recontextualized for EP and GP objectives)
             #  Simulated annealing (SciPy dual-annealing, simanneal), BFGS, shared/continually updated 'velocity' term, greater focus of distribution shapes and spreads, etc.
             #  May require a new GlobalEvolution with shared/persistant memory (tracking "directions" that are promising, while keeping novelty of EP and GP searches)
 
 import numpy as np
-import copy
 from collections.abc import Iterable
-from collections import namedtuple
-from typing import Literal
+from ..core import CustomType, LocalMutator, LocalVariator
 from .real_bijection import RealBijection
 from .point_bounds import PointBounds, bound_tools
 from ._distribution_tools import DistributionInfo
 from ._mutation_tools import *
 from ._crossover_tools import *
 from ..real_methods.numba_pcx import normalized_2d_pcx
-from ..real_methods.numba_differential import differential_evolve
 from ..integer_methods.integer_methods import int_mutation, single_binary_swap
-from ..utils import _min_max_norm_convert, clip, _nbits_encode, int_to_gray_encoding, gray_encoding_to_int
-from ..core import CustomType, LocalMutator, LocalVariator
+from ..utils import _min_max_norm_convert, _nbits_encode, int_to_gray_encoding, gray_encoding_to_int
 
 class MonotonicDistributions(CustomType):
     """ 
@@ -50,7 +41,6 @@ class MonotonicDistributions(CustomType):
     
     Return Variable
     ------
-    
     - The decoded variable type is a tuple: `(np.ndarray, int)`
     
     - The first element is the distribution: an 1D array of sorted `y` values
@@ -58,7 +48,7 @@ class MonotonicDistributions(CustomType):
     
     - The second element is the index of the mapping used to create the distribution (index of attribute *map_suite*).
         - For decoding/encoding
-        - Used to inspect the function the converged upon post-optimization 
+        - Used to inspect the function converged upon post-optimization 
         
     Note on *RealBijection* Inputs
     ------
@@ -100,7 +90,7 @@ class MonotonicDistributions(CustomType):
         ordinal_maps = False,
         max_points: int = 1000,  
         sort_ascending = True,
-        cache_type: Literal['cache', 'single'] | None = None,
+        use_cache = False,
         max_cache_size = 25):
         """
         Args:
@@ -110,7 +100,14 @@ class MonotonicDistributions(CustomType):
             ordinal_maps (bool, optional): Indicates that the RealBijection objects are inputted in some sort of order. Defaults to False.
             max_points (int, optional): If a *RealBijection*'s max_points bound not already set, this default value will be used. Defaults to 1000.
             sort_ascending (bool, optional): _description_. Indictes whether to return distributions in ascending or descending order. Defaults to True.
-            cache_type (Literal[&#39;cache&#39;, &#39;single&#39;] | None, optional): *experimental*. Defaults to None.
+            use_cache (Literal[&#39;cache&#39;, &#39;single&#39;] | None, optional): Cache mappings from encodings -> decoding. Defaults to False.
+            * If True, the decode method is wrapped in a fixed-sized LRU cache. If an encoding is in the cache, then creating the output distribution can be skipped
+            * If the local variator / local mutator probabilties are low, then using a cache can result in a significant speed up.
+            
+            max_cache_size (int): If `use_cache` is True, then this value indicates the maximum number of encoding -> decoding mappings that can be stored at once.
+            * As a general rule of thumb, the cache size does need to be much larger than the 'offspring size' of the Algorithm.
+            Or, for algorithms like NSGAII, around 0.5x - 1x the size of the population. 
+                This choice will depend on computation vs. memory efficiency requirements and probability gate values.
 
         Raises:
             ValueError: If the inverse function of any RealBijection map is not set
@@ -169,18 +166,23 @@ class MonotonicDistributions(CustomType):
 
         self.sort_ascending = sort_ascending
         self.ordinal_maps = ordinal_maps
+        encoding_memoization_type = 'cache' if use_cache else None
+        if use_cache and use_cache == 'single':
+            encoding_memoization_type = 'single' # experimental
         super().__init__(
             local_variator=local_variator, 
             local_mutator=local_mutator,
-            encoding_memoization_type=cache_type,
+            encoding_memoization_type=encoding_memoization_type,
             max_cache_size=max_cache_size)
     
     def _add_max_points(self, bounds: bound_tools.BoundsState, default_max_points: int):
         """Adds default max points when using a BoundsState"""
         default_max_points = max(bounds.min_points, default_max_points)
         bound_tools._cascade_from_points(default_max_points, from_max_points=True)
-        
+    
+    np.random.seed(133)
     def rand(self):
+        
         rand_function_idx = 0 if self.num_functions == 1 else np.random.randint(self.num_functions)
         bijection: RealBijection = self.map_suite[rand_function_idx] 
         x_bounds = bijection.point_bounds
@@ -206,7 +208,7 @@ class MonotonicDistributions(CustomType):
         # Get random points
         true_min_points, true_max_points = x_bounds.get_conditional_cardinality_with_width(output_width)
         output_points = true_min_points if true_min_points == true_max_points else np.random.randint(true_min_points, true_max_points+1)
-        
+        # print(f"RAND: max {output_start + output_width}, points {output_points}")
         return DistributionInfo(
             map_index=rand_function_idx,
             num_points= output_points,
@@ -216,6 +218,7 @@ class MonotonicDistributions(CustomType):
         )
     
     def encode(self, value: tuple):
+        # print('inner encode')
         y_distribution, map_idx = value
         bijection: RealBijection = self.map_suite[map_idx]
         x_bounds = bijection.point_bounds
@@ -339,11 +342,13 @@ class DistributionShift(LocalMutator):
         self.shift_beta = shift_beta
 
     def mutate(self, custom_type: MonotonicDistributions, offspring_solution, variable_index, **kwargs):
+        
         distribution_info: DistributionInfo = offspring_solution.variables[variable_index]
         bijection: RealBijection = custom_type.map_suite[distribution_info.map_index]
         x_bounds = bijection.point_bounds
         shift_mutation_prob = 0 if x_bounds.lower_bound == x_bounds.max_first_point or x_bounds.upper_bound == x_bounds.min_last_point else self.x_shift_prob
         if not custom_type.do_mutation or not (shift_mutation_prob > 0 and np.random.uniform() < shift_mutation_prob):
+            # print('local mutator (not mutation)')
             return
         
         shift_alpha = self.shift_alpha
@@ -354,8 +359,10 @@ class DistributionShift(LocalMutator):
             shift_alpha, shift_beta, 
             return_type = bijection.dtype)
         
-        if not x_shift:
+        if x_shift == 0:
+            # print('local mutator (not mutation)')
             return
+        # print('local mutator (mutated)')
         
         distribution_info.output_min_x += x_shift
         distribution_info.output_max_x += x_shift
@@ -395,6 +402,8 @@ class SampleCountMutation(LocalMutator):
         if not point_difference:
             return
         
+        # print(f"HERE POINTS: crossover prob {count_mutation_prob}")
+        
         distribution_info.num_points += point_difference
         if separation_change:
             distribution_info.separation = separation_change
@@ -429,6 +438,7 @@ class PointSeparationMutation(LocalMutator):
         separation_mutation_prob = self.separation_mutation_rate
         if not custom_type.do_mutation or x_bounds.min_separation == x_bounds.max_separation or not (
             separation_mutation_prob > 0 and np.random.uniform() < separation_mutation_prob):
+            # print("NO EVOLUTION")
             return
         
         separation_alpha = self.separation_alpha

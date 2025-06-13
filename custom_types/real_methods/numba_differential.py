@@ -4,7 +4,7 @@ from numba import (
     njit, guvectorize, 
     float32, float64, boolean,
     prange, typeof, optional)
-from ..utils import _float32_min_max_norm, _min_max_norm_convert
+from ..utils import _min_max_norm_convert
 
 bitgen = np.random.SFC64(7)
 gen    = np.random.Generator(bitgen)

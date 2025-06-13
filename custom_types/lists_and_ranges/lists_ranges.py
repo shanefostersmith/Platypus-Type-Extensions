@@ -1,27 +1,26 @@
 import numpy as np
 import inspect
-from ._tools import _stepped_range_mutation, _type_equals, find_closest_val
+from platypus import Solution
+from collections.abc import Sequence
 from bisect import bisect_left, bisect_right
 from ..core import CustomType, LocalMutator, LocalVariator
+from ._tools import _stepped_range_mutation, _type_equals, find_closest_val
 from ..integer_methods.integer_methods import multi_int_crossover, int_cross_over, int_mutation, _cut_points
 from ..real_methods.numba_differential import (
     real_mutation, differential_evolve, 
     gu_differential_evolve, 
     differential_evolve_with_probability,
     DE_with_probability)
-from ..utils import (_min_max_norm_convert, _nbits_encode, int_to_gray_encoding, gray_encoding_to_int,
-                     vectorized_to_norm, vectorized_from_norm, gu_normalize2D_1D)
+from ..utils import (
+    _min_max_norm_convert, _nbits_encode, int_to_gray_encoding, gray_encoding_to_int,
+    gu_normalize2D_1D, gu_normalize2D_2D,
+    gu_denormalize2D_1D, gu_denormalize2D_2D)
 from ..real_methods.numba_pcx import normalized_2d_pcx, normalized_1d_pcx
-
-from platypus import Solution
-from collections.abc import Sequence
-from numba import njit
-
 
 class Categories(CustomType):
     """`
     A CustomType representing categorical parameters that are **not** ordinal.
-        (If mutating/evolving a categorical variable that has an order, an integer should be evolved instead - i.e. an index)
+        (If mutating/evolving a categorical variable that has an order, an index (int) should be evolved instead)
     
     Input categories of the same type must have a valid *equals* operation
     
@@ -128,7 +127,7 @@ class CategoryCrossover(LocalVariator):
                 offspring.evaluated = False
         
         
-class SteppedRange(CustomType): # TODO INIT
+class SteppedRange(CustomType):
     """Evolve/mutate numbers that have a step value.
     
     For example:
@@ -140,7 +139,8 @@ class SteppedRange(CustomType): # TODO INIT
 
     def __init__(
         self,  
-        lower_bound, upper_bound, 
+        lower_bound, 
+        upper_bound, 
         step_value,
         local_variator = None,
         local_mutator = None):
@@ -164,10 +164,10 @@ class SteppedRange(CustomType): # TODO INIT
     def __str__(self):
         return f"SteppedRange: (lb = {self.lower_bound}, ub = {self.upper_bound} step = {self.step})"
 
-class SteppedRangeCrossover(LocalVariator): # TODO OVERRIDES
+class SteppedRangeCrossover(LocalVariator):
     """ A LocalVariator for a SteppedRange
     
-    Does an integer crossover of parent steps to create step values for the offspring Solution"""
+    Does an integer crossover of parent steps to choose step values for the offspring solutions"""
     _supported_types = SteppedRange
     _supported_arity = (2, None)
     _supported_noffspring = (1, None)
@@ -188,7 +188,6 @@ class SteppedRangeCrossover(LocalVariator): # TODO OVERRIDES
         parent_bits = np.empty((len(parent_solutions), nbits), np.bool_)
         for i, par in enumerate(parent_values):
             parent_step = int((par - custom_type.lower_bound) // custom_type.step)
-            print(f"parent_step: {parent_step}")
             parent_bits[i] = int_to_gray_encoding(parent_step, 0, custom_type.max_step, nbits)
             
         if noffspring == 1:
@@ -477,7 +476,7 @@ class MultiDifferentialEvolution(LocalVariator):
             all_or_none (bool, optional): Defaults to True.
             - If True, the probability gate applied to the offspring solution. If probability threshold is met, all floats are evolved.
             - If False, the probability gate applied to all floats individually.
-            - Note, applying the probability gate to offspring, instead of individual floats, is faster.
+            - Note, it is faster to apply the probability gate to the offspring instead of individual floats
         """        
         self.real_crossover_rate = real_crossover_rate
         self.real_step_size = real_step_size
@@ -539,15 +538,13 @@ class MultiPCX(LocalVariator):
         pcx_rate = self.pcx_rate 
         if not np.random.uniform() < pcx_rate:
             return
-        print(f"noffspring {len(offspring_solutions)}")
         eta = self.eta
         zeta = self.zeta
         nparents = len(parent_solutions)
         nreals = custom_type.ranges.shape[0]
         norm_parent_reals = np.empty((nparents, nreals), np.float32, order='C')
         for i, par in enumerate(parent_solutions):
-            # norm_parent_reals[i] = vectorized_to_norm(custom_type.ranges, par.variables[variable_index])
-            norm_parent_reals[i] = gu_normalize2D_1D(custom_type.ranges, par.variables[variable_index])
+            gu_normalize2D_1D(custom_type.ranges, par.variables[variable_index], out = norm_parent_reals[i])
         
         unique_copies=  self.group_by_copy(copy_indices) # parent -> offspring copies of parent
         parent_to_row = np.arange(nparents, dtype=np.uint16)
@@ -563,11 +560,10 @@ class MultiPCX(LocalVariator):
             parent_at_last_row = parent_idx
             # assert len(np.unique(parent_to_row)) == nparents
             
-            offspring_values = vectorized_from_norm( # Evolve all offspring that were copied from parent_idx
-                ranges = custom_type.ranges, 
-                values = normalized_2d_pcx(norm_parent_reals, len(offspring_indices), eta, zeta, randomize=False),
-                dtype = custom_type.dtype
-            )
+            # Evolve all offspring that were copied from parent_idx, convert to orig scale
+            offspring_values = normalized_2d_pcx(norm_parent_reals, len(offspring_indices), eta, zeta, randomize=False)
+            gu_denormalize2D_2D(custom_type.ranges, offspring_values)
+            
             for i, offspring_idx in enumerate(offspring_indices):
                 curr_offspring = offspring_solutions[offspring_idx]
                 curr_offspring.variables[variable_index] = offspring_values[i]
@@ -578,17 +574,14 @@ class MultiPCX(LocalVariator):
             temp = None
             for offspring_idx in unlabeled_offspring:
                 curr_offspring = offspring_solutions[offspring_idx]
-                offspring_norm = vectorized_to_norm(custom_type.ranges, curr_offspring.variables[variable_index])
+                offspring_norm = gu_normalize2D_1D(custom_type.ranges, curr_offspring.variables[variable_index])
                 rand_row = np.random.randint(nparents)
                 norm_parent_reals[[rand_row, -1]] = norm_parent_reals[[-1, rand_row]]
                 temp = norm_parent_reals[-1]
                 norm_parent_reals[-1] = offspring_norm
                 
-                curr_offspring.variables[variable_index] = vectorized_from_norm(
-                    ranges = custom_type.ranges,
-                    values = normalized_2d_pcx(norm_parent_reals, 1, eta, zeta, randomize=False)[0],
-                    dtype = custom_type.dtype
-                )
+                curr_offspring.variables[variable_index] = normalized_2d_pcx(norm_parent_reals, 1, eta, zeta, randomize=False)[0]
+                gu_denormalize2D_1D(custom_type.ranges, curr_offspring.variables[variable_index])
                 curr_offspring.evaluated = False
                 norm_parent_reals[-1] = temp
 
@@ -735,7 +728,7 @@ class RealListPCX(LocalVariator):
             parent_at_last_row = parent_idx
             # assert len(np.unique(parent_to_row)) == nparents
             
-            new_values = normalized_1d_pcx(norm_parent_reals, np.uint8(len(offspring_indices)), eta, zeta, randomize=False)
+            new_values = normalized_1d_pcx(norm_parent_reals, np.uint32(len(offspring_indices)), eta, zeta, randomize=False)
             for i, offspring_idx in enumerate(offspring_indices):
                 curr_offspring = offspring_solutions[offspring_idx]
                 true_val = find_closest_val(custom_type.reals, _min_max_norm_convert(custom_type.reals[0], custom_type.reals[-1], new_values[i], False))
@@ -754,7 +747,7 @@ class RealListPCX(LocalVariator):
                 temp = norm_parent_reals[-1]
                 norm_parent_reals[-1] = offspring_norm
                 
-                new_value = normalized_1d_pcx(norm_parent_reals, np.uint8(1), eta, zeta, randomize=False)[0]
+                new_value = normalized_1d_pcx(norm_parent_reals, np.uint32(1), eta, zeta, randomize=False)[0]
                 true_val = find_closest_val(custom_type.reals, _min_max_norm_convert(custom_type.reals[0], custom_type.reals[-1], new_value, False))
                 if true_val != curr_offspring.variables[variable_index]:
                     curr_offspring.variables[variable_index] = true_val

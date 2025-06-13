@@ -2,6 +2,7 @@ import pytest
 import numpy as np
 import custom_types.real_methods.numba_pcx as pcx
 
+
 SPEED_TEST_DIM = [(3,3), (10, 100), (250,250), (10000,10), (10,10000)]
 # SPEED_TEST = [(3,3), (100000, 2), (10000, 10), (2000, 50), (1000, 100), (500, 500), (100, 990), (50,2000), (10, 10000)]
 
@@ -73,4 +74,3 @@ def np32_ranges_DE(request):
     p2 = np.full(vector_length, half_max / 4, dtype = np.float32)
     p3 = np.full(vector_length, half_max / 2.5, dtype = np.float32)
     return matrix, orig, p1, p2, p3
-

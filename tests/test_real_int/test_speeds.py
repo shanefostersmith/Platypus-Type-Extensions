@@ -8,7 +8,7 @@ from custom_types.real_methods.numba_differential import *
 from custom_types.utils import (
     gu_normalize2D_1D, gu_normalize2D_2D,
     gu_denormalize2D_1D, gu_denormalize2D_2D,
-    vector_normalize1D, vectorized_to_norm)
+    _vector_normalize1D, vectorized_to_norm)
 
 def test_norm_speed(np64_ranges):
     matrix, values = np64_ranges
@@ -33,7 +33,7 @@ def test_norm_speed(np64_ranges):
 
         start_gu = time.perf_counter()
         for i in range(LOOPS):
-            _ = vector_normalize1D(matrix[:,0], matrix[:,1], values)
+            _ = _vector_normalize1D(matrix[:,0], matrix[:,1], values)
         end_gu = time.perf_counter()
         print(f"NORMAL: {end_gu - start_gu}")
 

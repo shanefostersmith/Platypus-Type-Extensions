@@ -136,7 +136,7 @@ def simpleFunc(vars: list):
     Takes some number of vars, applies random objective scores.
     Assumes no constraints, and 1 objective"""
     
-    return [np.random.uniform()], []
+    return [np.random.uniform()]
 
 def unconstrainedProblem(*vars):
     """Create a Problem with any number of decision variables, one objective and no contraints"""
@@ -190,9 +190,9 @@ def create_one_var_solutions(custom_type: CustomType, nparents = 2, noffspring =
         return parent_solutions, offspring_solutions, copy_indices
     
 def create_multi_var_solutions(
+    *custom_types,
     nsolutions = 2, 
-    problem = None,
-    *custom_types):
+    problem = None):
     
     if problem is None:
         problem = unconstrainedProblem(*custom_types)
@@ -202,8 +202,8 @@ def create_multi_var_solutions(
     out = []
     for _ in range(nsolutions):
         solution = Solution(problem)
+        solution.evaluated = True
         for custom_type in custom_types:
-            solution.evaluated = True
             for j in range(problem.nvars):
                 solution.variables[j] = custom_type.rand()
             if issubclass(type(custom_type.local_variator), LocalMutator):

@@ -3,7 +3,6 @@ import numpy as np
 import custom_types.real_methods.numba_pcx as pcx
 from tests.conftest import noffspring
 from tests.test_real_int.conftest import p_matrix, _batch_pcx, _mod_pcx, _numpy_pcx
-# from pytest_mock import MockerFixture
 
 class TestNormalizedPCX:
     
@@ -64,7 +63,5 @@ class TestNormalizedPCX:
             zeta = np.float32(0.1),
             randomize=True
         ) 
-        
     
- 
 

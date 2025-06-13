@@ -44,6 +44,7 @@ class BasicGlobalEvolution(GlobalEvolution):
         super().__init__(nparents, noffspring)
 
     def evolve(self, parents: list[Solution]):
+        # print(f'evolve: arity {self.arity}, {len(parents)}')
         assert isinstance(parents, list)
         copy_indices = None
         if isinstance(self.copy_method, int):
@@ -57,6 +58,6 @@ class BasicGlobalEvolution(GlobalEvolution):
         for custom_type, variable_index in self.generate_types_to_evolve(offspring[0].problem):
             if self.global_dampener == 1 or random.uniform() < self.global_dampener:
                 custom_type.execute_variator(parents, offspring, variable_index, copy_indices)
-                
+                # print(f"offspring flag: {offspring[0].evaluated}, id {id(offspring) % 100}")
         return offspring
         

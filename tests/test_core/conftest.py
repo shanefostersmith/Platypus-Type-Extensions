@@ -163,7 +163,7 @@ def multi_selection_partition_solutions(multi_selection_set_partition: LocalSequ
     num_parents = nparents_and_noffspring[0]
     num_offspring = nparents_and_noffspring[1]
     if deepcopy_type is None:
-        all_solutions = create_multi_var_solutions(num_parents + num_offspring, None, set_partition)
+        all_solutions = create_multi_var_solutions(set_partition, nsolutions=num_parents + num_offspring, problem = None)
         copy_indices = [None for _ in range(num_offspring)]
         return all_solutions[:num_parents], all_solutions[num_parents:], copy_indices
     if deepcopy_type == 'order':
@@ -180,7 +180,7 @@ def single_selection_real_solutions(single_selection_multi_real: LocalSequential
     num_parents = nparents_and_noffspring[0]
     num_offspring = nparents_and_noffspring[1]
     if deepcopy_type is None:
-        all_solutions = create_multi_var_solutions(num_parents + num_offspring, None, real_type)
+        all_solutions = create_multi_var_solutions(real_type, nsolutions=num_parents + num_offspring, problem=None)
         copy_indices = [None for _ in range(num_offspring)]
         return all_solutions[:num_parents], all_solutions[num_parents:], copy_indices
     if deepcopy_type == 'order':
@@ -198,7 +198,7 @@ def single_selection_partition_solutions(single_selection_set_partition: LocalSe
     num_offspring = nparents_and_noffspring[1]
     
     if deepcopy_type is None:
-        all_solutions = create_multi_var_solutions(num_parents + num_offspring, None, set_partition)
+        all_solutions = create_multi_var_solutions(set_partition, nsolutions=num_parents + num_offspring, problem=None)
         copy_indices = [None for _ in range(num_offspring)]
         return all_solutions[:num_parents], all_solutions[num_parents:], copy_indices
     

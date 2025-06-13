@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 from tests.test_list_ranges.test_list_ranges import *
 from custom_types.lists_and_ranges.lists_ranges import MultiDifferentialEvolution, RealListDE
-from tests.conftest import create_one_var_solutions
+from tests.conftest import create_one_var_solutions, deepcopy_parents
 from platypus import Problem, Solution
 
 def test_categories(category_type):
@@ -28,14 +28,20 @@ def test_step_range(step_value_type):
             assert sol.variables[0] == orig_parent_categories[i]
 
 def test_multi_real_crossover(multi_real_with_crossover):
-    nparents = 2
+    nparents = 3
     noffspring = 2
+    copy_indices = None
     if isinstance(multi_real_with_crossover.local_variator, MultiDifferentialEvolution):
         nparents = 4
         noffspring = 1
+        copy_indices = [0]
+    else:
+        copy_indices = [None,0]
         
-    parent_sol, offspring_sol, copy_indices = create_one_var_solutions(multi_real_with_crossover, nparents, noffspring, deepcopy=True)
+        
+    parent_sol, offspring_sol, _= create_one_var_solutions(multi_real_with_crossover, nparents, noffspring)
     orig_parent_categories = [sol.variables[0] for sol in parent_sol]
+    print(f"copy_indices: {copy_indices}")
     multi_real_with_crossover.local_variator.evolve(multi_real_with_crossover, parent_sol, offspring_sol, variable_index=0, copy_indices = copy_indices)
     for i, sol in enumerate(parent_sol):
         assert np.all(sol.variables[0] == orig_parent_categories[i])

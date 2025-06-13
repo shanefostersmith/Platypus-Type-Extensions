@@ -1,20 +1,10 @@
 import numpy as np
-from numba import njit, vectorize, guvectorize, float32, float64, boolean, prange
+from numba import njit, vectorize, guvectorize, float32, float64, boolean
 from numbers import Integral
 from math import floor
 
-
 def clip(val, lower_bound, upper_bound):
     return max(lower_bound, min(val, upper_bound))
-
-def group_by_copy(copy_indices) -> dict[int, list[int]]:
-    unique_copies = {} 
-    for i, copy_idx in enumerate(copy_indices):
-        if copy_idx is None:
-            unique_copies.setdefault(-1, []).append(i)
-        else:
-            unique_copies.setdefault(copy_idx, []).append(i)
-    return unique_copies
 
 @njit([
     float32(float32, float32, float32, boolean),
@@ -26,58 +16,6 @@ def _min_max_norm_convert(min_val, max_val, curr_val, to_norm):
     if to_norm:
         return 1.0 if max_val == min_val else (curr_val - min_val) / (max_val - min_val)
     return curr_val * (max_val - min_val) + min_val
-
-@njit("float32(float32, float32, float32, boolean)")
-def _float32_min_max_norm(min_val, max_val, curr_val, to_norm):
-    if to_norm:
-        return 1.0 if max_val == min_val else (curr_val - min_val) / (max_val - min_val)
-    return curr_val * (max_val - min_val) + min_val
-
-@njit
-def _int_to_binary_list(num_bits: Integral, curr_val: Integral):
-    """
-    Converts an int to a binary numpy array
-    
-    First bit is a sign bit, and rest of bits are magnitude
-    """    
-    binary_array = np.zeros(num_bits, dtype=np.bool_)
-    magnitude = curr_val
-    if curr_val < 0:
-        binary_array[0] = True
-        magnitude = -magnitude
-    for i in range(num_bits-1):
-        binary_array[num_bits - 1 - i] = (magnitude >> i) & 1 
-    return binary_array
-
-@njit
-def binary_list_to_int(binary_list: np.ndarray, lower_bound, upper_bound):
-    """
-    Converts a binary array to an int
-    
-    Assumes first bit is a sign bit
-    """    
-    num = 0
-    num_bits = len(binary_list)
-    for i in range(1, num_bits):
-        if binary_list[i]:
-            num += 1 << (num_bits - 1 - i)
-    if binary_list[0]:
-        num = -num
-    if num < lower_bound:
-        return np.int32(lower_bound)
-    elif num > upper_bound:
-        return np.int32(upper_bound)
-    return np.int32(num)
-
-def bounds_to_nbits(lower_bound: Integral, upper_bound: Integral) -> int:
-    """Find the minimum signed bit length given lower bound and upper bound
-        (including the sign bit)
-    
-    """    
-    mag = max(abs(int(lower_bound)), abs(int(upper_bound)))
-    mag_bits = max(1, mag.bit_length())
-    return mag_bits + 1
-
 
 def vectorized_to_norm(ranges: np.ndarray, values: np.ndarray, in_place = False):
     """Convert a 1D or 2D array of values to 0-1 range
@@ -167,23 +105,6 @@ gu_descale_1Dsig = [
     (float32[:,:], float64[:]),
     (float64[:,:], float64[:])
 ]
-
-@vectorize(
-    [float32(float32, float32, float32), 
-    float64(float64, float64, float64)], 
-    nopython = True, cache = True)
-def vector_normalize1D(lb, ub, value):
-    if lb == ub:
-        return 1
-    else:
-        return (value - lb) / (ub - lb)
-
-@vectorize(
-    [float32(float32, float32, float32), 
-    float64(float64, float64, float64)], 
-    nopython = True, cache = True)
-def vector_denormalize1D(lb, ub, value):
-    return value * (ub - lb) + lb
 
 @guvectorize(gu_scale_1Dsig, '(r,c),(r)->(r)', nopython = True, cache = True)
 def gu_normalize2D_1D(ranges, values, out): 
@@ -394,7 +315,22 @@ def _gray_to_int(min_value, max_value, gray_encoding):
     return min_value + value
 
 
+@vectorize(
+    [float32(float32, float32, float32), 
+    float64(float64, float64, float64)], 
+    nopython = True, cache = True)
+def _vector_normalize1D(lb, ub, value):
+    if lb == ub:
+        return 1
+    else:
+        return (value - lb) / (ub - lb)
 
+@vectorize(
+    [float32(float32, float32, float32), 
+    float64(float64, float64, float64)], 
+    nopython = True, cache = True)
+def _vector_denormalize1D(lb, ub, value):
+    return value * (ub - lb) + lb
 
 
 # Future work: Implement this faster to nbits function (input = max_value - min_value)

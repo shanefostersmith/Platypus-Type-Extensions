@@ -6,7 +6,7 @@ from platypus.types import Type as PlatypusType
 from warnings import warn
 from abc import ABCMeta, abstractmethod
 from multiprocessing import Value
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import Any, Type, Literal, Union, Generator
 from types import MethodType
 from copy import deepcopy
@@ -34,16 +34,16 @@ class CustomType(PlatypusType):
     These flags are automatically set at initialization (depending on the input LocalVariator types)
     
     This class also allows caching / memoization of encoded variable -> decoded variable mapping. 
-    A CustomType variable may have an expensive decoding operation; if there is a low probability that an encoded variable will mutate, then temporarily storing the mapping can increase computational efficiency.
+    A CustomType variable may have an expensive decoding operation; if there is a low probability that an encoded variable will mutate and/or if the same encoding are likely to appear many times, 
+    then temporarily storing the mapping can increase computational efficiency.
+    
     There are two types of memoization that can be implementated
     
     - **LRU Cache**: Stores multiple encoding variable -> decoded variable mappings. Assumes that more recently seen encodings are more likely to appear again.
         - Particularly useful when variables are defined with discrete types and/or when the same encodings appear over the course of multiple generations
         - It is required that the encodings are hashable, and that decoded variables are read-only during evaluations
-    - **Single Variable Memoization**: Stores a single encoded variable -> decoded variable mapping between evaluations. 
-        - If an encoded variable did not change between evaluations (during a GlobalEvolution's `evolve()`), then no decoding occurs. Instead, the stored decoded variable is deepcopied and returned.
-        - More memory efficient than an LRU Cache and does not require decoded variables to be read-only during evaluations
-        - It is required that the encodings have a valid `__eq__` method and that decoding does not occur during an evolution or mutation (ie. decoding only occurs *once* before the evaluation)
+        
+    - **(experimental) Single Variable Memoization**: Prevents encodings from being recalculated before and after Problem evaluations. 
     
     """    
     
@@ -51,8 +51,7 @@ class CustomType(PlatypusType):
                  local_variator = None,
                  local_mutator = None,
                  encoding_memoization_type: Literal['cache', 'single'] | None  = None,
-                 post_decode: callable | None = None,
-                 max_cache_size = 50):
+                 max_cache_size = 25):
         """
         Must provide at least one of *local_variator* or *local_mutator* 
         
@@ -65,9 +64,9 @@ class CustomType(PlatypusType):
                 - Must be a LocalMutator and must contain this CustomType subclass in _supported_types
             encoding_memoization_type (Literal[&#39;cache&#39;, &#39;single&#39;] | None, optional): A memoization technique for encoded variables -> decoded variables. Defaults to None.
                 - 'cache': Store encoding / decoding mappings with an LRU cache 
-                - 'single': Stores a single encoding / decoding between evaluations
+                - 'single': *experimental* Stores a single encoding / decoding between evaluations
                 - (see class doc strings for more details and variable requirements)
-            max_cache_size (int, optional): If *encoding_memoization_type* is a cache, specificy the LRU cache size. Defaults to 50.
+            max_cache_size (int, optional): If *encoding_memoization_type* is a cache, specify the LRU cache size. Defaults to 25.
 
         """        
         
@@ -90,25 +89,20 @@ class CustomType(PlatypusType):
         # self.do_evolution = Value('b', False)
         # self.do_mutation = Value('b', False)
         if local_variator is not None and local_mutator is not None:
-            # print("here both")
             self.local_variator = LocalGAOperator(local_variator, local_mutator)
             self.do_evolution = True
             self.do_mutation = True
         elif local_variator is None and local_mutator is None:
-            # print("here none")
             self.do_evolution = False
             self.do_mutation = False
         elif local_variator is None and local_mutator is not None:
-            # print("here mutate")
             self.local_variator = local_mutator
             self.do_mutation = True
             self.do_evolution = False
         elif isinstance(local_variator, LocalGAOperator):
-            # print("here gao")
             self.do_evolution = True
             self.do_mutation = True
         elif isinstance(local_variator, LocalSequentialOperator):
-            # print("here sequantial")
             self.do_mutation = local_variator._contains_mutation
             self.do_evolution = local_variator._contains_crossover 
         elif isinstance(local_variator, LocalVariator):
@@ -122,13 +116,15 @@ class CustomType(PlatypusType):
         self._mem_encode = None
         self._mem_decode = None
         self._enc_temp = None
+        
         if encoding_memoization_type == 'cache':
             self.decode = lru_cache(max_cache_size)(self.decode)
         elif encoding_memoization_type == 'single':
+            self._enc_temp = [None, None]
             self._mem_encode = self.encode
             self._mem_decode = self.decode
-            self.encode = MethodType(_single_memo_encode, self)
-            self.decode = MethodType(_single_memo_decode, self)
+            self.encode = MethodType(tools._single_memo_encode, self)
+            self.decode = MethodType(tools._single_memo_decode, self)
         
         super().__init__()
 
@@ -158,8 +154,8 @@ class CustomType(PlatypusType):
             raise ValueError(f"The number of copy_indices ({len(copy_indices)}) is not equal to the number of offspring Solutions ({noffspring})")
         if not self.in_arity_noffspring_limits(nparents, noffspring):
             warn(f"The number of parents solution {nparents} and number of offspring solution {noffspring} is not compatible with this CustomType's LocalVariator {self.local_variator!r}. \n The LocalVariator was not executed")
+            # print("HERE ")
             return
-        
         self.local_variator.evolve(self, parent_solutions, offspring_solutions, variable_index, copy_indices, **kwargs)
     
     def _can_evolve(self):
@@ -181,25 +177,8 @@ class CustomType(PlatypusType):
         super().__setattr__(name, value)
         if name in ('do_mutation', 'do_evolution'):
             if hasattr(self, 'do_mutation') and hasattr(self, 'do_evolution'):
-                # print(f"here check {type(self.local_variator)}")
-                # print(f"Before {self._mut}, do_evolve / mutate: {self.do_evolution}, {self.do_mutation}")
                 self._mut = self._can_evolve()
-                # print(f"After {self._mut} \n")
 
-def _single_memo_encode(self: CustomType, decoded):
-    encoded = self._mem_encode(decoded)
-    self._enc_temp = (encoded, decoded)
-    return encoded
-    
-def _single_memo_decode(self: CustomType, encoded):
-    if not isinstance(self._enc_temp, tuple) or encoded != self._enc_temp[0]:
-        self._enc_temp = None
-        return self._mem_decode(encoded)
-    else:
-        decoded = deepcopy(self._enc_temp[1])
-        self._enc_temp = None
-        return decoded 
-    
 class StandardCrossover(Enum):
     """
     Keywords for built-in crossover operators recognized by GlobalEvolution.
@@ -479,8 +458,9 @@ class LocalMutator(LocalVariator, metaclass = ABCMeta):
         if isinstance(offspring_solutions, Solution):
             self.mutate(custom_type, offspring_solutions, variable_index, **kwargs)
             return
-        map(lambda offspring: self.mutate(custom_type, offspring, variable_index, **kwargs), offspring_solutions)
-            
+        for o in offspring_solutions:
+            self.mutate(custom_type, o, variable_index, **kwargs)
+
     @abstractmethod
     def mutate(
         self,

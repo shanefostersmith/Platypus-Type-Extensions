@@ -1,6 +1,6 @@
 import numpy as np
 from ..core import CustomType, GlobalEvolution
-from .generic_local import real_pcx_evolve, integer_parent_crossover
+from ..global_evolutions._generic_type_tools import real_pcx_evolve, integer_parent_crossover
 from platypus import Problem, Solution, Integer, Real
 
 class GlobalPCX(GlobalEvolution):
