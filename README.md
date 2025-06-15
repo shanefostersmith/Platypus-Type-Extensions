@@ -7,9 +7,11 @@ All variable types and strategies are fully compatible with the Platypus MOO fra
 ## New Optimization Variables
 
 - **Floating Point Arrays**
-    - Optimize a Numpy array of floats with Numba-accelerated strategies (PCX, Differential Evolution, Polynomial Mutation, etc.)
+    - Optimize a Numpy array of floats with Numba-accelerated strategies 
+        - (PCX, Differential Evolution, Polynomial Mutation, etc.)
 - **Integer Arrays**
-    - Optimize a Numpy array of integers with Numba-accelerated strategies (Integer Crossover, Binary Swap, Bit Flip, etc.)
+    - Optimize a Numpy array of integers with Numba-accelerated strategies 
+        - (Integer Crossover, Binary Swap, Bit Flip, etc.)
 - **SetPartition**:
     - Optimize a subset of elements partitioned into bins
 - **WeightedSet**:
@@ -85,17 +87,19 @@ The test extra also requires:
 
 ## Usage
 
-The main difference between optimization variables in this library and the Platypus library is the distinction between "local" variators and "global" variators.
+The main difference between this library and the Platypus library is the distinction between "local" variators and "global" variators.
 
-- A `LocalVariator` or `LocalMutator` defines a crossover or mutation strategy for a one or more variable types, and compatible arities for that method
+- A `LocalVariator` or `LocalMutator` defines a crossover or mutation strategy for a one or more variable types
     - Each optimization variable, including variables of the *same* type, can be assigned a different `LocalVariator`
+    - A `LocalVariator` also defines compatible arities for its `evolve()` method (ie. the number of parents and offspring solutions)
+        - A `LocalMutator` is a special type of `LocalVariator` that mutates one offspring solution at a time without using parent solutions
+
+- A `GlobalEvolution` directs the crossover and mutation of all optimization variables, and may define non-uniform mutation behavior, staggered convergence, etc.
 
 - This library also provides compound operators for `LocalVariator`:
     - `LocalGAOperator`: Combine a `LocalVariator` with a `LocalMutator`
     - `LocalCompoundMutator`: Compound any number of `LocalMutator`
     - `LocalSequentialOperator`: Compound any number of `LocalVariator` and `LocalMutator`
-
-- A `GlobalEvolution` directs the crossover and mutation of all optimization variables, and may define non-uniform mutation behavior, staggered convergence, etc.
 
 - The `CustomType`, `LocalVariator`, and `GlobalEvolution` class docs provide information on how to build your own optimization variable types and evolution strategies
 
@@ -106,7 +110,10 @@ Optimizing three variables of two different types with Platypus's NSGAII algorit
 ```python
 
     from platypus import Problem, NSGAII
-    from platypus_extensions import GeneralGlobalEvolution, SteppedRange, SteppedRangeCrossover, StepMutation, RealList, RealListPM
+    from platypus_extensions import (
+        GeneralGlobalEvolution, 
+        SteppedRange, SteppedRangeCrossover, StepMutation, 
+        RealList, RealListPM)
 
     # LocalVariators
     step_variator = SteppedRangeCrossover(step_crossover_rate = 0.2)
@@ -114,8 +121,17 @@ Optimizing three variables of two different types with Platypus's NSGAII algorit
     real_list_mutator = RealListPM(mutation_probability = 0.2)
 
     # Optimization variables
-    step_variable1 = SteppedRange(lower_bound = 0, upper_bound = 1, step_value = 0.1, local_variator = step_variator)
-    step_variable2 = SteppedRange(lower_bound = -1, upper_bound = 0, step_value = 0.2, local_variator = step_variator, local_mutator = step_mutator) 
+    step_variable1 = SteppedRange(
+        lower_bound = 0, upper_bound = 1, 
+        step_value = 0.1, 
+        local_variator = step_variator
+    )
+    step_variable2 = SteppedRange(
+        lower_bound = -1, upper_bound = 0,
+        step_value = 0.2, 
+        local_variator = step_variator, 
+        local_mutator = step_mutator
+    ) 
     real_list = RealList(real_list = [-0.1, 0.25, 0.5], local_mutator = real_list_mutator)
 
     # Problem definition
