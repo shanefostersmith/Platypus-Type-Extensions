@@ -1,7 +1,7 @@
 import pytest
 from math import floor
 from pyomo.util.infeasible import find_infeasible_constraints
-from custom_types.distributions import _bounds_tools
+from platypus_extensions.distributions import _bounds_tools
 from ..point_bounds import *
 from .conftest import *
 

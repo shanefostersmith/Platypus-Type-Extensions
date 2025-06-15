@@ -4,8 +4,8 @@ import time
 from numba.typed.typedlist import List
 from tests.conftest import np64_ranges, np64_2D_ranges
 from tests.test_real_int.conftest import np32_ranges_DE, matrix_dim_speed, _batch_pcx, _mod_pcx, _numpy_pcx
-from custom_types.real_methods.numba_differential import *
-from custom_types.utils import (
+from platypus_extensions.real_methods.numba_differential import *
+from platypus_extensions.utils import (
     gu_normalize2D_1D, gu_normalize2D_2D,
     gu_denormalize2D_1D, gu_denormalize2D_2D,
     _vector_normalize1D, vectorized_to_norm)

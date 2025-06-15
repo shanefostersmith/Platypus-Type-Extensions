@@ -1,5 +1,5 @@
 import pytest
-from custom_types.lists_and_ranges.lists_ranges import *
+from platypus_extensions.lists_and_ranges.lists_ranges import *
 from tests.conftest import single_variation_type
 
 @pytest.fixture

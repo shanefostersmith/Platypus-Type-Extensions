@@ -3,8 +3,8 @@ import numpy as np
 import copy
 from typing import Literal
 from platypus import Problem, Solution
-from custom_types.core import CustomType, LocalVariator, LocalMutator
-from custom_types.global_evolutions.general_global_evolution import GeneralGlobalEvolution
+from platypus_extensions.core import CustomType, LocalVariator, LocalMutator
+from platypus_extensions.global_evolutions.general_global_evolution import GeneralGlobalEvolution
 
 @pytest.fixture(
     params=[1, 2, 5],

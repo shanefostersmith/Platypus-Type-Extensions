@@ -2,10 +2,10 @@
 import pytest
 import copy
 from itertools import permutations
-from custom_types.core import *
+from platypus_extensions.core import *
 from tests.test_core.conftest import *
-from custom_types.bins_and_sets.bins_and_sets import SetPartition, ActiveBinSwap, FixedSubsetSwap, BinMutation
-from custom_types.lists_and_ranges.lists_ranges import (
+from platypus_extensions.bins_and_sets.bins_and_sets import SetPartition, ActiveBinSwap, FixedSubsetSwap, BinMutation
+from platypus_extensions.lists_and_ranges.lists_ranges import (
     MultiRealRange, MultiIntegerRange, RealList, SteppedRange,
     ArrayCrossover, MultiIntegerMutation,
     MultiPCX, MultiDifferentialEvolution, MultiRealPM,

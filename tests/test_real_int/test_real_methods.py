@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-import custom_types.real_methods.numba_pcx as pcx
+import platypus_extensions.real_methods.numba_pcx as pcx
 from tests.conftest import noffspring
 from tests.test_real_int.conftest import p_matrix, _batch_pcx, _mod_pcx, _numpy_pcx
 

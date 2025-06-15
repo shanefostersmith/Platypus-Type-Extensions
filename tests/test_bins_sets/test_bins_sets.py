@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from custom_types.bins_and_sets.bins_and_sets import *
+from platypus_extensions.bins_and_sets.bins_and_sets import *
 from tests.conftest import create_one_var_solutions, deepcopy_parents
 from tests.test_bins_sets.conftest import *
 

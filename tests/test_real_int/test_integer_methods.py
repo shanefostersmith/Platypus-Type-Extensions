@@ -2,8 +2,8 @@ from conftest import *
 import numpy as np
 import pytest
 from platypus.tests.test_types import Integer
-from custom_types.utils import int_to_gray_encoding, gray_encoding_to_int
-from custom_types.integer_methods.integer_methods import multi_int_crossover, single_binary_swap
+from platypus_extensions.utils import int_to_gray_encoding, gray_encoding_to_int
+from platypus_extensions.integer_methods.integer_methods import multi_int_crossover, single_binary_swap
 
 MIN_VALUE = -1
 MAX_VALUE = 16

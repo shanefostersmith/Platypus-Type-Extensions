@@ -1,7 +1,7 @@
 
 import pytest
 from time import perf_counter
-from custom_types.global_evolutions.general_global_evolution import GeneralGlobalEvolution
+from platypus_extensions.global_evolutions.general_global_evolution import GeneralGlobalEvolution
 from platypus import EvolutionaryStrategy, NSGAII
 from pytest_mock import MockerFixture
 from tests.conftest import unconstrainedProblem, Solution, CustomType

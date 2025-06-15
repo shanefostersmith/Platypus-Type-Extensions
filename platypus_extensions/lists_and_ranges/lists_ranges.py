@@ -570,7 +570,7 @@ class MultiPCX(LocalVariator):
             gu_normalize2D_1D(custom_type.ranges, par.variables[variable_index], out = norm_parent_reals[i])
         
         last_row = nparents - 1
-        parent_to_row = np.arange(nparents, dtype=np.uint16)
+        parent_to_row = np.arange(nparents, dtype=np.uint32)
         parent_at_last_row = last_row 
         for parent_idx, offspring_indices in unique_copies.items():
             if parent_idx == -1:
@@ -592,7 +592,6 @@ class MultiPCX(LocalVariator):
                 curr_offspring.variables[variable_index] = offspring_values[i]
                 curr_offspring.evaluated = False
 
-        unlabeled_offspring = unique_copies.get(-1)
         if has_unlabeled: # Not copied from any solutions in parents_solutions, an extra row was added to 'norm_parent_reals'
             unlabeled_offspring = unique_copies[-1]
             for offspring_idx in unlabeled_offspring:
@@ -741,7 +740,7 @@ class RealListPCX(LocalVariator):
             norm_parent_reals[i] = _min_max_norm_convert(custom_type.reals[0], custom_type.reals[-1], par.variables[variable_index], True)
         
         last_row  = nparents - 1
-        parent_to_row = np.arange(nparents, dtype=np.uint16) # arr[parent_idx] = parent_row
+        parent_to_row = np.arange(nparents, dtype=np.uint32) # arr[parent_idx] = parent_row
         parent_at_last_row = last_row
         for parent_idx, offspring_indices in unique_copies.items():
             if parent_idx == -1:
@@ -763,24 +762,18 @@ class RealListPCX(LocalVariator):
                     curr_offspring.variables[variable_index] = true_val
                     curr_offspring.evaluated = False
                     
-        unlabeled_offspring = unique_copies.get(-1)
-        if unlabeled_offspring: # Not copied from any solutions in parents_solutions
-            temp = None
+        if has_unlabeled: # Not copied from any solutions in parents_solutions
+            unlabeled_offspring = unique_copies[-1]
             for offspring_idx in unlabeled_offspring:
                 curr_offspring = offspring_solutions[offspring_idx]
                 offspring_norm = _min_max_norm_convert(custom_type.reals[0], custom_type.reals[-1], curr_offspring.variables[variable_index], True)
-                rand_row = np.random.randint(nparents)
-                norm_parent_reals[[rand_row, -1]] = norm_parent_reals[[-1, rand_row]]
-                temp = norm_parent_reals[-1]
                 norm_parent_reals[-1] = offspring_norm
-                
+
                 new_value = normalized_1d_pcx(norm_parent_reals, np.uint32(1), eta, zeta, randomize=False)[0]
                 true_val = find_closest_val(custom_type.reals, _min_max_norm_convert(custom_type.reals[0], custom_type.reals[-1], new_value, False))
                 if true_val != curr_offspring.variables[variable_index]:
                     curr_offspring.variables[variable_index] = true_val
                     curr_offspring.evaluated = False
-                    
-                norm_parent_reals[-1] = temp
         
 class StepMutation(LocalMutator): 
     """A LocalMutator for a SteppedRange or RealList.

@@ -4,9 +4,9 @@ from platypus import RandomGenerator, Integer, Real
 from tests.conftest import create_basic_global_evolution
 from tests.test_core.conftest import *
 from tests.test_core.confglobal import *
-from custom_types.core import CustomType, PlatypusType
-from custom_types.global_evolutions.global_differential import GlobalDifferential
-from custom_types.lists_and_ranges.lists_ranges import RealList, RealListDE, RealListPM
+from platypus_extensions.core import CustomType, PlatypusType
+from platypus_extensions.global_evolutions.global_differential import GlobalDifferential
+from platypus_extensions.lists_and_ranges.lists_ranges import RealList, RealListDE, RealListPM
 
 class TestBasicGlobal:
     

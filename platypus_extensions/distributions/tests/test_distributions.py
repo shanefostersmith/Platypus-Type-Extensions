@@ -1,5 +1,5 @@
 import pytest
-from custom_types.distributions.monotonic_distributions import *
+from platypus_extensions.distributions.monotonic_distributions import *
 from ...distributions.tests.conftest import *
 
 class TestFixedMapMonotonic:

@@ -1,7 +1,7 @@
 import pytest
-from custom_types.core import *
+from platypus_extensions.core import *
 from tests.test_core.conftest import *
-from custom_types.global_evolutions.general_global_evolution import GeneralGlobalEvolution
+from platypus_extensions.global_evolutions.general_global_evolution import GeneralGlobalEvolution
 
 @pytest.mark.parametrize(
     'variators', [

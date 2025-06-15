@@ -314,7 +314,7 @@ def _classic_gs(
     return out, D, n_non_zero
 
 
-# @njit([S.offspring32, S.offspring64])
+@njit([S.offspring32, S.offspring64])
 def _find_offspring_pcx(
     parent_vars:np.ndarray, 
     noffspring: np.uint32,

@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 from tests.test_list_ranges.test_list_ranges import *
-from custom_types.lists_and_ranges.lists_ranges import MultiDifferentialEvolution, RealListDE
+from platypus_extensions.lists_and_ranges.lists_ranges import MultiDifferentialEvolution, RealListDE
 from tests.conftest import create_one_var_solutions, deepcopy_parents
 from platypus import Problem, Solution
 

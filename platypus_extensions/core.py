@@ -1,5 +1,5 @@
 import numpy as np
-import custom_types._tools as tools
+import platypus_extensions._tools as tools
 import contextvars
 from platypus import Solution, Problem, Variator
 from platypus.types import Type as PlatypusType

@@ -1,4 +1,4 @@
-from custom_types.core import CustomType, LocalVariator, LocalMutator, PlatypusType
+from platypus_extensions.core import CustomType, LocalVariator, LocalMutator, PlatypusType
 from platypus import Variator, Mutation, Solution, Problem, GAOperator
 from typing import Literal, Generator
 from copy import deepcopy

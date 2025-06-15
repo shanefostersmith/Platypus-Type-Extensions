@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-import custom_types.real_methods.numba_pcx as pcx
+import platypus_extensions.real_methods.numba_pcx as pcx
 
 
 SPEED_TEST_DIM = [(3,3), (10, 100), (250,250), (10000,10), (10,10000)]

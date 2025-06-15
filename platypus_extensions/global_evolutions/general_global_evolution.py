@@ -4,7 +4,7 @@ from platypus import Solution, Problem
 from typing import Literal
 
 class GeneralGlobalEvolution(GlobalEvolution):
-    """A basic GlobalEvolution
+    """A generic GlobalEvolution
     
     This class only evolves CustomType objects, and does not specify a standard crossover or deepcopying method"""
     
