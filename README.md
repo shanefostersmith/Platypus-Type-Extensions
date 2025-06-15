@@ -1,7 +1,7 @@
 # Platypus-Type-Extensions
 
 This library introduces new optimization variable types for multi-objective optimization and associated crossover and mutation strategies. 
-It also includes a flexible framwork to for defining new variable types and optimizing mixed-type problems within a single global variator.
+It also includes a flexible framework to for defining new variable types and optimizing mixed-type problems within a single global variator.
 All variable types and strategies are fully compatible with the Platypus MOO framework.
 
 ## New Optimization Variables
@@ -89,11 +89,14 @@ The main difference between optimization variables in this library and the Platy
 
 - A `LocalVariator` or `LocalMutator` defines a crossover or mutation strategy for a one or more variable types, and compatible arities for that method
     - Each optimization variable, including variables of the *same* type, can be assigned a different `LocalVariator`
-    - Similar to the Platypus framework, this library provides compound operators for `LocalVariator`s such as:
-        - `LocalGAOperator`: Combine a `LocalVariator` with a `LocalMutator`
-        - `LocalCompoundMutator`: Compound any number of `LocalMutator`
-        - `LocalSequentialOperator`: Compound any number of `LocalVariator` and `LocalMutator`
+
+- This library also provides compound operators for `LocalVariator`:
+    - `LocalGAOperator`: Combine a `LocalVariator` with a `LocalMutator`
+    - `LocalCompoundMutator`: Compound any number of `LocalMutator`
+    - `LocalSequentialOperator`: Compound any number of `LocalVariator` and `LocalMutator`
+
 - A `GlobalEvolution` directs the crossover and mutation of all optimization variables, and may define non-uniform mutation behavior, staggered convergence, etc.
+
 - The `CustomType`, `LocalVariator`, and `GlobalEvolution` class docs provide information on how to build your own optimization variable types and evolution strategies
 
 ### An Example
@@ -126,9 +129,11 @@ Optimizing three variables of two different types with Platypus's NSGAII algorit
     algorithm = NSGAII(problem = problem, variator = global_variator)
     algorithm.run(10000)
 ```
-`GeneralGlobalEvolution` executes the LocalVariators associated with the optimization variables during each step of the algorithm.
-Providing both a LocalVariator and a LocalMutator to an optimization variable automatically creates a `LocalGAOperator`.
-LocalVariators may be provided to optimization variables at initialization or after initialization (and may be altered or changed at any time)
+- `GeneralGlobalEvolution` executes the LocalVariators associated with the optimization variables during each step of the algorithm
+
+- Providing both a LocalVariator and a LocalMutator to an optimization variable automatically creates a `LocalGAOperator`.
+
+- LocalVariators may be provided to optimization variables at initialization or after initialization (and may be altered or changed at any time)
 
 
 ## License
