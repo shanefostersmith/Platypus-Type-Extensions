@@ -1,10 +1,12 @@
 import pytest
 from copy import deepcopy
-from platypus import RandomGenerator
+from platypus import RandomGenerator, Integer, Real
 from tests.conftest import create_basic_global_evolution
 from tests.test_core.conftest import *
 from tests.test_core.confglobal import *
 from custom_types.core import CustomType, PlatypusType
+from custom_types.global_evolutions.global_differential import GlobalDifferential
+from custom_types.lists_and_ranges.lists_ranges import RealList, RealListDE, RealListPM
 
 class TestBasicGlobal:
     
@@ -77,8 +79,29 @@ class TestBasicGlobal:
                 
             for _, i in basic_global_evolution.generate_types_to_evolve(multi_custom_types):
                 assert not i in evolution_only, f"fail type {type(multi_custom_types.types[i])}: variator {multi_custom_types.types[i].local_variator!r}"
+    
+      
+def test_global_differential():
+    global_de = GlobalDifferential()
+    generic_int_1 = Integer(2, 10)
+    generic_int_2 = Integer(-5, -1)
+    generic_real_1 = Real(0.1, 0.9)
+    generic_real_2 = Real(0.5, 0.6)
+    real_list1 = RealList([-0.1, 0.1, 0.2], local_variator=RealListDE(0.99))
+    real_list2 = RealList([-0.1, 0.1, 0.2], local_mutator=RealListPM())
+    mixed_type1 = unconstrainedProblem(
+        generic_int_1, generic_int_2,
+        generic_real_1, generic_real_2,
+        real_list1, real_list2)
+    
+    parents = create_multi_var_solutions(
+        nsolutions = 4,
+        problem = mixed_type1
+    )
+    offspring = global_de.evolve(parents)
+    assert isinstance(offspring, list) and len(offspring) == 1
         
-
+        
 
 
     

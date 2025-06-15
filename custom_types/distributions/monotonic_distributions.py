@@ -94,20 +94,19 @@ class MonotonicDistributions(CustomType):
         max_cache_size = 25):
         """
         Args:
-            mappings (Iterable[RealBijection]):  An iterable of *RealBijection* objects with the inverse function set (see RealBijection)
-            local_variator (LocalVariator, optional): A compatible LocalVariator for MonotonicDistributions. Defaults to None.
-            local_mutator (_type_, optional): A compatible LocalMutator for MonotonicDistributions. Defaults to None.
+            mappings (Iterable[RealBijection]): An iterable of *RealBijection* objects with the inverse function set (see RealBijection)
+            local_variator (LocalVariator, optional): Cannot be a LocalMutator, should have MonotonicDistributions registered in _supported_types. Defaults to None.
+            local_mutator (LocalMutator, optional): A LocalMutator, should have MonotonicDistributions registered in _supported_types. Defaults to None.
             ordinal_maps (bool, optional): Indicates that the RealBijection objects are inputted in some sort of order. Defaults to False.
-            max_points (int, optional): If a *RealBijection*'s max_points bound not already set, this default value will be used. Defaults to 1000.
-            sort_ascending (bool, optional): _description_. Indictes whether to return distributions in ascending or descending order. Defaults to True.
-            use_cache (Literal[&#39;cache&#39;, &#39;single&#39;] | None, optional): Cache mappings from encodings -> decoding. Defaults to False.
-            * If True, the decode method is wrapped in a fixed-sized LRU cache. If an encoding is in the cache, then creating the output distribution can be skipped
-            * If the local variator / local mutator probabilties are low, then using a cache can result in a significant speed up.
-            
-            max_cache_size (int): If `use_cache` is True, then this value indicates the maximum number of encoding -> decoding mappings that can be stored at once.
-            * As a general rule of thumb, the cache size does need to be much larger than the 'offspring size' of the Algorithm.
-            Or, for algorithms like NSGAII, around 0.5x - 1x the size of the population. 
-                This choice will depend on computation vs. memory efficiency requirements and probability gate values.
+            max_points (int, optional): If a *RealBijection*'s 'max_points' bound not already set, this default value will be used. Defaults to 1000.
+            sort_ascending (bool, optional): Indictes whether to return distributions in ascending or descending order. Defaults to True.
+            use_cache (bool, optional): Cache mappings from encodings -> decoding. Defaults to False.
+                - If True, the decode method is wrapped in a fixed-sized LRU cache. If an encoding is in the cache, then creating the output distribution can be skipped
+                - Using a cache can result in signficant spped ups, particularly if the mutation probabilties are low and/or there are a small number of candidate distributions
+            max_cache_size (int, optional): If `use_cache` is True, then this value indicates the maximum number of encoding -> decoding mappings that can be stored at once. Defaults to 25.
+                -  As a general rule of thumb, the cache size does need to be much larger than the 'offspring size' of the Algorithm.
+                Or, for algorithms like NSGAII, around 0.5x - 1x the size of the population. 
+                - This choice will depend on computation vs. memory efficiency requirements and probability gate values.
 
         Raises:
             ValueError: If the inverse function of any RealBijection map is not set
@@ -180,7 +179,6 @@ class MonotonicDistributions(CustomType):
         default_max_points = max(bounds.min_points, default_max_points)
         bound_tools._cascade_from_points(default_max_points, from_max_points=True)
     
-    np.random.seed(133)
     def rand(self):
         
         rand_function_idx = 0 if self.num_functions == 1 else np.random.randint(self.num_functions)
@@ -208,7 +206,6 @@ class MonotonicDistributions(CustomType):
         # Get random points
         true_min_points, true_max_points = x_bounds.get_conditional_cardinality_with_width(output_width)
         output_points = true_min_points if true_min_points == true_max_points else np.random.randint(true_min_points, true_max_points+1)
-        # print(f"RAND: max {output_start + output_width}, points {output_points}")
         return DistributionInfo(
             map_index=rand_function_idx,
             num_points= output_points,
@@ -218,7 +215,6 @@ class MonotonicDistributions(CustomType):
         )
     
     def encode(self, value: tuple):
-        # print('inner encode')
         y_distribution, map_idx = value
         bijection: RealBijection = self.map_suite[map_idx]
         x_bounds = bijection.point_bounds
@@ -265,21 +261,31 @@ class FixedMapConversion(LocalMutator):
     Applies relative x values of a previous solution to new distribution
     
     If a MonotonicDistributions type has the *ordinal_maps* attribute set to True,
-    then a bit flip mutation is used. Otherwise, offspring maps are chosen randomly from parent maps.
+    then a bit flip mutation is used. Otherwise, offspring maps are chosen randomly from the candidate distributions.
+    
     """
 
     _supported_types = (MonotonicDistributions)
+    __slots__ = ("map_conversion_probability", "y_based_conversion")
     
-    def __init__(self, map_conversion_rate = 0.1, y_based_map_conversion = False):
-        self.map_conversion_rate = map_conversion_rate
-        self.y_based_map_conversion = y_based_map_conversion
+    def __init__(self, map_conversion_probability = 0.1, y_based_conversion = False):
+        """
+        Args:
+            map_conversion_probability (float, optional): The probability an offspring's map will be changed. Defaults to 0.1.
+            y_based_conversion (bool, optional): Indicates which domain to prioritize when converting output values to the new map. Defaults to False.
+            - If True, keep the output start and end 'y' values as close as possible to the previous 'y' values during the conversion.
+            - If False, keep the relative start and end 'x' values as close as possible to the previous relative 'x' values during the conversion
+                -- "relative" = normalized to the width of the 'x' range `(x_value / (x_max - x_min)`)
+        """        
+        self.map_conversion_probability = map_conversion_probability
+        self.y_based_conversion = y_based_conversion
         
     def mutate(self, custom_type: MonotonicDistributions, offspring_solution, variable_index, **kwargs):
-        mapping_mutation_prob = 0 if custom_type.num_functions == 1 else self.map_conversion_rate
+        mapping_mutation_prob = 0 if custom_type.num_functions == 1 else self.map_conversion_probability
         if not custom_type.do_mutation or not (mapping_mutation_prob > 0 and np.random.uniform() < mapping_mutation_prob):
             return
 
-        y_based = self.y_based_map_conversion
+        y_based = self.y_based_conversion
         distribution_info: DistributionInfo = offspring_solution.variables[variable_index]
 
         new_map_idx = None
@@ -333,11 +339,22 @@ class DistributionShift(LocalMutator):
     If a RealBijection/PointBounds object defines a "fixed" first or last point (the lower bound is equal to first bounds upper bound, or vice versa),
     then no shift can occur"""
     _supported_types = MonotonicDistributions
+    __slots__ = ("shift_probability", "shift_alpha", "shift_beta")
     
-    def __init__(self, x_shift_prob = 0.5, shift_alpha = 1.5, shift_beta = 6):
+    def __init__(self, shift_probability = 0.5, shift_alpha = 1.5, shift_beta = 6):
+        """Note, shift_alpha and shift_beta parameterize a `numpy.beta(alpha, beta)` distribution
+
+        Args:
+            shift_probability (float, optional): _description_. Defaults to 0.5.
+            shift_alpha (float, optional): Controls the distribution of shift magnitudes. Defaults to 1.5.
+            shift_beta (int, optional): Controls the distribution of shift magnitudes.Defaults to 6.
+
+        Raises:
+            ValueError: If shift_alpha <= 0 or shift_beta <= 0
+        """        
         if shift_alpha <= 0 or shift_beta <= 0:
             raise ValueError("Both 'shift_alpha' and 'shift_beta' must be greater than 0")
-        self.x_shift_prob = x_shift_prob
+        self.shift_probability = shift_probability
         self.shift_alpha = shift_alpha
         self.shift_beta = shift_beta
 
@@ -346,9 +363,8 @@ class DistributionShift(LocalMutator):
         distribution_info: DistributionInfo = offspring_solution.variables[variable_index]
         bijection: RealBijection = custom_type.map_suite[distribution_info.map_index]
         x_bounds = bijection.point_bounds
-        shift_mutation_prob = 0 if x_bounds.lower_bound == x_bounds.max_first_point or x_bounds.upper_bound == x_bounds.min_last_point else self.x_shift_prob
+        shift_mutation_prob = 0 if x_bounds.lower_bound == x_bounds.max_first_point or x_bounds.upper_bound == x_bounds.min_last_point else self.shift_probability
         if not custom_type.do_mutation or not (shift_mutation_prob > 0 and np.random.uniform() < shift_mutation_prob):
-            # print('local mutator (not mutation)')
             return
         
         shift_alpha = self.shift_alpha
@@ -360,9 +376,7 @@ class DistributionShift(LocalMutator):
             return_type = bijection.dtype)
         
         if x_shift == 0:
-            # print('local mutator (not mutation)')
             return
-        # print('local mutator (mutated)')
         
         distribution_info.output_min_x += x_shift
         distribution_info.output_max_x += x_shift
@@ -377,33 +391,38 @@ class SampleCountMutation(LocalMutator):
     
     """
     _supported_types = MonotonicDistributions
+    __slots__ = ("mutation_probability", "mutation_count_limit")
     
-    def __init__(self, sample_count_mutation_rate = 0.1, sample_count_mutation_limit: int | None = None):
-        self.sample_count_mutation_rate = sample_count_mutation_rate
-        if sample_count_mutation_limit is not None:
-            sample_count_mutation_limit = int(max(1, sample_count_mutation_limit))
-        self.sample_count_mutation_limit = None
+    def __init__(self, mutation_probability = 0.1, mutation_count_limit: int | None = None):
+        """
+        Args:
+            mutation_probability (float, optional): Defaults to 0.1.
+            mutation_count_limit (int | None, optional): An inclusive upper limit on how many points can be added or removed during a mutation. Defaults to None.
+                - If None, the limit is only defined by the cardinality bounds of the current map
+        """        
+        self.mutation_probability = mutation_probability
+        self.mutation_count_limit = None
+        if mutation_count_limit is not None:
+            mutation_count_limit = int(max(1, mutation_count_limit))
     
     def mutate(self, custom_type: MonotonicDistributions, offspring_solution, variable_index, **kwargs):
         distribution_info: DistributionInfo = offspring_solution.variables[variable_index]
         bijection: RealBijection = custom_type.map_suite[distribution_info.map_index]
         x_bounds = bijection.point_bounds
-        count_mutation_prob = self.sample_count_mutation_rate 
+        count_mutation_prob = self.mutation_probability
         
         if not custom_type.do_mutation or x_bounds.min_points == x_bounds.max_points or not (
             count_mutation_prob > 0 and np.random.uniform() < count_mutation_prob):
             return
         
-        count_limit = self.sample_count_mutation_limit
+        count_limit = self.mutation_count_limit
         point_difference, diff_at_min_x, separation_change = count_mutation(
             x_bounds, distribution_info.output_min_x, distribution_info.output_max_x,
-            distribution_info.separation, distribution_info.num_points, count_limit)
+            distribution_info.separation, distribution_info.num_points, count_limit=count_limit)
         
         if not point_difference:
             return
-        
-        # print(f"HERE POINTS: crossover prob {count_mutation_prob}")
-        
+
         distribution_info.num_points += point_difference
         if separation_change:
             distribution_info.separation = separation_change
@@ -425,9 +444,17 @@ class PointSeparationMutation(LocalMutator):
     (see SampleCountMutation)
     """
     _supported_types = MonotonicDistributions
+    __slots__ = ("mutation_probability", "separation_alpha", "separation_beta")
     
-    def __init__(self, separation_mutation_rate = 0.1, separation_alpha = 1, separation_beta = 10):
-        self.separation_mutation_rate = separation_mutation_rate
+    def __init__(self, mutation_probability = 0.1, separation_alpha = 1, separation_beta = 10):
+        """Note, separation_alpha and separation_beta parameterize a `numpy.beta(alpha, beta)` distribution
+
+        Args:
+            mutation_probability (float, optional): Defaults to 0.1.
+            separation_alpha (int, optional): Controls the distribution of output separation values. Defaults to 1.
+            separation_beta (int, optional): Controls the distribution of output separation values. Defaults to 10.
+        """        
+        self.mutation_probability = mutation_probability
         self.separation_alpha = separation_alpha
         self.separation_beta = separation_beta
     
@@ -435,10 +462,9 @@ class PointSeparationMutation(LocalMutator):
         distribution_info: DistributionInfo = offspring_solution.variables[variable_index]
         bijection: RealBijection = custom_type.map_suite[distribution_info.map_index]
         x_bounds = bijection.point_bounds
-        separation_mutation_prob = self.separation_mutation_rate
+        separation_mutation_prob = self.mutation_probability
         if not custom_type.do_mutation or x_bounds.min_separation == x_bounds.max_separation or not (
             separation_mutation_prob > 0 and np.random.uniform() < separation_mutation_prob):
-            # print("NO EVOLUTION")
             return
         
         separation_alpha = self.separation_alpha
@@ -459,28 +485,38 @@ class PointSeparationMutation(LocalMutator):
         offspring_solution.evaluated = False
 
 class FixedMapCrossover(LocalVariator):
-    """A LocalVariator for MonotonicDistributions and subclasses
+    """A LocalVariator for MonotonicDistributions 
     
-    Crossover parent maps to """
+    Choose offspring maps (candidate distributions) by crossing over parent maps."""
     
     _supported_types = MonotonicDistributions
     _supported_arity =  (2, None)
     _supported_noffspring =  (1, None)
+    __slots__ = ("map_crossover_rate", "y_based_crossover", "equal_map_crossover")
 
     def __init__(self, 
                  map_crossover_rate = 0.1, 
-                 y_based_map_crossover = False, 
+                 y_based_crossover = False, 
                  equal_map_crossover = False):
+        """
+        Args:
+            map_crossover_rate (float, optional): Defaults to 0.1.
+            y_based_crossover (bool, optional): Indicates which domain to prioritize when converting output values to the new map. Defaults to False.
+                - If True, keep the output start and end 'y' values as close as possible to the previous 'y' values during the conversion.
+                - If False, keep the "relative" start and end 'x' values as close as possible to the previous relative 'x' values during the conversion
+                -       "relative" = normalized to the width of the x domain (x_value / (x_max - x_min))
+            equal_map_crossover (bool, optional): If True, the frequency of a map in parent solution is ignored. Defaults to False.
+        """        
         self.map_crossover_rate = map_crossover_rate
         self.equal_map_crossover  = equal_map_crossover 
-        self.y_based_map_crossover = y_based_map_crossover
+        self.y_based_crossover = y_based_crossover 
     
     def evolve(self, custom_type: MonotonicDistributions, parent_solutions, offspring_solutions, variable_index, copy_indices, **kwargs):
         crossover_rate = self.map_crossover_rate
         if not crossover_rate > 0 or custom_type.num_functions == 1:
             return
         equal_choice = self.equal_map_crossover
-        y_based = self.y_based_map_crossover
+        y_based = self.y_based_crossover 
         
         parent_distrib_info = self.get_solution_variables(parent_solutions, variable_index)
         parent_maps = [distrib_info.map_index for distrib_info in parent_distrib_info]
@@ -520,6 +556,7 @@ class DistributionBoundsPCX(LocalVariator):
     _supported_types = MonotonicDistributions
     _supported_arity =  (2, None)
     _supported_noffspring =  (1, None)
+    __slots__ = ("distribution_pcx_rate", "bound_eta", "bound_zeta", "y_based_pcx")
     
     def __init__(self, distribution_pcx_rate = 0.25, bound_eta = 0.1, bound_zeta = 0.1, y_based_pcx = False):
         self.distribution_pcx_rate = distribution_pcx_rate
@@ -600,7 +637,6 @@ class DistributionBoundsPCX(LocalVariator):
             else:
                 parent_vars[i,curr_idx] = (min_max_y[i][1] - custom_type.global_min_y) / y_width
 
-        
         # Do PCX by "reference" parent
         parent_to_row = np.arange(new_nparents, dtype=np.uint16)
         parent_at_last_row = new_nparents - 1
@@ -611,7 +647,7 @@ class DistributionBoundsPCX(LocalVariator):
             parent_to_row[parent_idx] = new_nparents -1
             parent_to_row[parent_at_last_row] = new_reference_row
             parent_at_last_row = parent_idx
-            # assert len(np.unique(parent_to_row)) == new_nparents, f"new_nparents = {new_nparents}, p->r{parent_to_row}"
+            # assert len(np.unique(parent_to_row)) == new_nparents
 
             new_vars = normalized_2d_pcx(parent_vars, len(offspring_indices), eta, zeta, randomize=False)
             for i, offspring_idx in enumerate(offspring_indices):

@@ -92,8 +92,6 @@ def apply_y_bound_pcx(
         global_y_width (float): _description_
     """    
     x_bounds = bijection.point_bounds
-    # print(f"INNER MAP IDX: {offspring_info.map_index}")
-    # print(f"INNER Y_BASED bounds: {x_bounds!r}")
     y_min, y_max, max_first_y, min_last_y = ordered_y_bounds(bijection)
     new_x_width = None
     true_min_width = x_bounds.true_min_width

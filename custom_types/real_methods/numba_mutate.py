@@ -5,7 +5,6 @@ from numba import (
     float32, float64, boolean,
     prange, typeof)
 
-
 @njit
 def real_PM(x, lb, ub, distribution_index):
     """Polynomial mutation of a single float
@@ -32,7 +31,5 @@ def real_PM(x, lb, ub, distribution_index):
         
     x = x + delta*dx
     return max(lb, min(x, ub))
-
-# @guvectorize()
 
 

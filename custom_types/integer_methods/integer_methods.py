@@ -10,7 +10,7 @@ def int_mutation(bits: np.ndarray, probability = 0.0):
     Args:
         bits (np.ndarray): 1d numpy array of np.bool_ elements (the gray encoding of an integer)
         probability (float | numpy.float64): The probability an individual bit will be flipped. Defaults to 0.0
-            If probability <= 0.0, will default to `1 / max(2, len(bits))`
+            - If probability <= 0.0, will default to `1 / max(2, len(bits))`
             
     Returns:
         (np.ndarray, bool): The mutated gray encoding (not a new array), and a bool indicating if a bit was flipped
@@ -34,8 +34,9 @@ def _cut_points(num_bits, num_parents):
     
     If num_parents > num_bits, then num_bits number of segments are returned
     
-    
-    - """
+    Returns (np.ndarray):
+        A 'num_parents' or 'num_bits' sized array of segment sizes
+    """
     if num_parents >= num_bits:
         return np.ones(num_bits, np.uint16)
         
@@ -94,7 +95,8 @@ def _execute_crossover(
     
 @njit(boolean[:](boolean[:,:]))
 def int_cross_over(parent_bits: np.ndarray):
-    """Integer crossover given any number of parents and their bits
+    """
+    Integer crossover given any number of parents and their bits
         Produces 1 offspring  
 
     There should be > 1 parent (otherwise copy of parent is returned)
@@ -118,7 +120,8 @@ def int_cross_over(parent_bits: np.ndarray):
 
 @njit(boolean[:,:](boolean[:,:], intp))
 def multi_int_crossover(parent_bits: np.ndarray, noffspring: int):
-    """Integer crossover given any number of parents and their bits
+    """
+    Integer crossover given any number of parents and their bits
         Can produce multiple offspring 
     
     There should be > 1 parent (otherwise copy of parent is returned)
@@ -155,7 +158,8 @@ def multi_int_crossover(parent_bits: np.ndarray, noffspring: int):
 
 @njit(boolean[:](boolean[:,:], boolean[:]))
 def single_binary_swap(parent_bits: np.ndarray, offspring_bits: np.ndarray):
-    """Given offspring bits and parents bits, choose a random parent and 
+    """
+    Given offspring bits and parents bits, choose a random parent and 
     randomly set offspring bits with those parent bits
 
     Similar to HUX, but only changing the offspring bits (in-place)

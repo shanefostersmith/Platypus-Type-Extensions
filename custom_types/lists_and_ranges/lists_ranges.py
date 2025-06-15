@@ -3,6 +3,7 @@ import inspect
 from platypus import Solution
 from collections.abc import Sequence
 from bisect import bisect_left, bisect_right
+from typing import Literal
 from ..core import CustomType, LocalMutator, LocalVariator
 from ._tools import _stepped_range_mutation, _type_equals, find_closest_val
 from ..integer_methods.integer_methods import multi_int_crossover, int_cross_over, int_mutation, _cut_points
@@ -18,12 +19,11 @@ from ..utils import (
 from ..real_methods.numba_pcx import normalized_2d_pcx, normalized_1d_pcx
 
 class Categories(CustomType):
-    """`
+    """
     A CustomType representing categorical parameters that are **not** ordinal.
-        (If mutating/evolving a categorical variable that has an order, an index (int) should be evolved instead)
+        (If mutating/evolving a categorical variable that has an order, an index value should be evolved instead)
     
     Input categories of the same type must have a valid *equals* operation
-    
     """    
     def __init__(
         self, 
@@ -52,18 +52,18 @@ class Categories(CustomType):
 
 class CategoryMutation(LocalMutator):
     _supported_types = Categories
-    __slots__ = ("category_mutation_prob")
+    __slots__ = ("mutation_probability")
     
-    def __init__(self, category_mutation_prob = 0.1):
+    def __init__(self, mutation_probability= 0.1):
         """
         Args:
-            category_mutation_prob (float, optional): Probablity of mutation. Defaults to 0.1.
+            mutation_probability (float, optional): Probablity of mutation. Defaults to 0.1.
                 If number of categories == 2, then the "other" category is chosen for the offspring. Otherwise, a random category is chosen.
         """        
-        self.category_mutation_prob = category_mutation_prob
+        self.mutation_probability = mutation_probability
     
     def mutate(self, custom_type: Categories, offspring_solution: Solution, variable_index, **kwargs):
-        mutation_prob = self.category_mutation_prob
+        mutation_prob = self.mutation_probability
         if not np.random.uniform() < mutation_prob:
             return
 
@@ -95,9 +95,8 @@ class CategoryCrossover(LocalVariator):
             category_crossover_rate (float, optional): Probability of choosing a random parent category for the offspring category. Defaults to 0.25.
                 All offspring are evolved or none 
             equal_crossover (bool, optional): Defaults to False.
-                If False, then probability of choosing a parent category during crossover is dependent on how many parents Solutions have that category.
-                
-                If True, all categories that exist in parent Solutions have an equal chance of being chosen (ignore the frequency of a category in parent solutions)
+                - If False, then probability of choosing a parent category during crossover is dependent on how many parents Solutions have that category.
+                - If True, all categories that exist in parent Solutions have an equal chance of being chosen (ignore the frequency of a category in parent solutions)
                     
         """        
         self.category_crossover_rate = category_crossover_rate
@@ -134,7 +133,7 @@ class SteppedRange(CustomType):
         `lower_bound == 1`, `upper_bound == 4`, `step = 0.25`
         - Evolve numbers in the discrete range `(1, 1.25, 1.5, ..., 4)`
     
-    The upper bound is inclusive if it is a valid "step"
+    The upper bound is inclusive if it is a valid 'step'
     """     
 
     def __init__(
@@ -144,6 +143,18 @@ class SteppedRange(CustomType):
         step_value,
         local_variator = None,
         local_mutator = None):
+        """
+        Args:
+            lower_bound (Number): 
+            upper_bound (Number):
+            step_value (Number): 
+            local_variator (LocalVariator, optional): Cannot be a LocalMutator, should have SteppedRange registered in _supported_types. Defaults to None.
+            local_mutator (LocalMutator, optional): A LocalMutator, should have SteppedRange registered in _supported_types. Defaults to None.
+
+        Raises:
+            ValueError: If the step value is <= 0
+            ValueError: If the upper bound is less than one step value away from the lower bound
+        """        
 
         if step_value <= 0:
             raise ValueError("The step value must be greater than 0")
@@ -167,18 +178,18 @@ class SteppedRange(CustomType):
 class SteppedRangeCrossover(LocalVariator):
     """ A LocalVariator for a SteppedRange
     
-    Does an integer crossover of parent steps to choose step values for the offspring solutions"""
+    Does an integer crossover of parent steps to choose offspring step values"""
     _supported_types = SteppedRange
     _supported_arity = (2, None)
     _supported_noffspring = (1, None)
-    __slots__ = ("stepped_crossover_rate")
+    __slots__ = ("step_crossover_rate")
     
-    def __init__(self, stepped_crossover_rate = 0.2):
-        self.stepped_crossover_rate = stepped_crossover_rate
+    def __init__(self, step_crossover_rate = 0.2):
+        self.step_crossover_rate = step_crossover_rate
     
     def evolve(self, custom_type: SteppedRange, parent_solutions: list[Solution], offspring_solutions: list[Solution], variable_index, copy_indices, **kwargs):
         do_crossover = kwargs.get("crossover")
-        crossover_prob = self.stepped_crossover_rate
+        crossover_prob = self.step_crossover_rate
         if not (do_crossover or np.random.uniform() < crossover_prob):
             return
         
@@ -223,23 +234,18 @@ class MultiIntegerRange(CustomType):
         self, 
         ranges: np.ndarray, 
         dtype: type = np.int32,
-        local_mutator: LocalMutator = None,
-        local_variator: LocalVariator = None):             
+        local_variator: LocalVariator = None,
+        local_mutator: LocalMutator = None):             
         """
-        If a LocalVariator and a LocalMutator are provided, a LocalGAOperator will be created. Equivalently, a LocalGAOperator can be provided as the LocalVariator.
-        
         Args:
             ranges (np.ndarray): A 2D numpy array with `n` rows and 2 columns. The *inclusive* ranges of each integer
-            
-            - An integer `i` has a lower bound `inclusive_ranges[i,0]` and an inclusive upper bound `inclusive_ranges[i,1]`
-            
-            - `ranges[i,0]` may equal `ranges[i,1]`, in which case integer `i` is never mutated or evolved
-                
+                - An integer `i` has a lower bound `inclusive_ranges[i,0]` and an inclusive upper bound `inclusive_ranges[i,1]`
+                - `ranges[i,0]` may equal `ranges[i,1]`, in which case integer `i` is never mutated or evolved   
             dtype (type): A numpy integer type: the type of the output arrays. Defaults to numpy.int32
                 If a python `int` type is inputted, a numpy int32 will be used as default 
+            local_variator (LocalVariator, optional): Cannot be a LocalMutator, should have MultiIntegerRange registered in _supported_types. Defaults to None.
+            local_mutator (LocalMutator, optional): A LocalMutator, should have MultiIntegerRange registered in _supported_types. Defaults to None.
             
-            local_mutator (LocalMutator, optional): A LocalMutator, should have MultiIntegerType registered in _supported_types. Defaults to None.
-            local_variator (LocalVariator, optional): Cannot be a LocalMutator and shoud have MultiIntegerType registered in _supported_types. Defaults to None.
         """        
         if not (ranges.ndim == 2 and ranges.shape[0] > 0 and ranges.shape[1] == 2):
             raise TypeError("Invalid 'ranges' input: A 2D ndarray with at least 1 row and 2 columns is required")
@@ -295,18 +301,18 @@ class MultiIntegerMutation(LocalMutator):
     
     Mutates integers individually with a bit flip"""
     _supported_types = MultiIntegerRange
-    __slots__ = ("single_int_mutation_prob")
+    __slots__ = ("mutation_probability")
 
-    def __init__(self, single_int_mutation_prob = 1.0):
+    def __init__(self, mutation_probability = 1.0):
         """
         Args:
             single_int_mutation_prob: Probability a single integer will be mutated. Defaults to 1.0
                 If >= 1, mutation probability defaults to `1 / max(2, number of integers)`
         """        
-        self.single_int_mutation_prob = single_int_mutation_prob
+        self.mutation_probability = mutation_probability
     
     def mutate(self, custom_type: MultiIntegerRange, offspring_solution, variable_index, **kwargs):
-        mutation_prob = self.single_int_mutation_prob 
+        mutation_prob = self.mutation_probability
         if not mutation_prob:
             return
         if mutation_prob >= 1:
@@ -335,18 +341,18 @@ class MultiIntegerCrossover(LocalVariator):
     _supported_types = MultiIntegerRange
     _supported_arity = (2, None)
     _supported_noffspring = (1, None)
-    __slots__ = ("single_int_crossover_rate")
+    __slots__ = ("idv_crossover_rate")
     
-    def __init__(self, single_int_crossover_rate = 1.0):
+    def __init__(self, idv_crossover_rate = 1.0):
         """
         Args:
-             single_int_crossover_rate: Probability that a single integer will be evolved from crossing over parents integers.  Defaults to 1.0
+            idv_crossover_rate: Probability that a single integer will be evolved from crossing over parents integers.  Defaults to 1.0
                 The probability gate is applied to integers individually (if threshold is met, that integer is evolved for all offspring)
         """        
-        self.single_int_crossover_rate = single_int_crossover_rate
+        self.idv_crossover_rate = idv_crossover_rate
     
     def evolve(self, custom_type: MultiIntegerRange, parent_solutions, offspring_solutions, variable_index, copy_indices, **kwargs):
-        indv_crossover_prob = self.single_int_crossover_rate
+        indv_crossover_prob = self.idv_crossover_rate
         if not indv_crossover_prob:
             return
         if indv_crossover_prob >= 1:
@@ -395,20 +401,25 @@ class MultiRealRange(CustomType):
     def __init__(
         self, 
         ranges: np.ndarray,
-        dtype: type = np.float32,
+        precision: Literal['single','double'] = 'single',
         local_variator: LocalVariator = None,
         local_mutator: LocalMutator = None
         ):
+        """
+        Args:
+            ranges (np.ndarray): _description_
+            precision (Literal[&#39;single&#39;,&#39;double&#39;], optional): The dtype of the output floats, 'single' (float32) or 'double' (float64). Defaults to 'single'.
+            local_variator (LocalVariator, optional): Cannot be a LocalMutator, should have MultiRealRanges registered in _supported_types. Defaults to None.
+            local_mutator (LocalMutator, optional): A LocalMutator, should have  MultiRealRanges registered in _supported_types. Defaults to None.
+
+        Raises:
+            ValueError: If any `ranges[i, 0] >= ranges[i, 1]`
+        """              
         
         assert ranges.ndim == 2, "'ranges' must be a 2D numpy array"
         assert ranges.shape[0] > 0 and not ranges.shape[1] < 2, "At least 1 row and 2 columns must exist in 'ranges'"
-        assert inspect.isclass(dtype), f"'dtype' must be a type. Got {dtype!r}"
-        if dtype == float:
-            dtype = np.float32
-        else:
-            assert issubclass(dtype, np.floating), "The 'dtype' must be a python float type or numpy float type"
-        self.dtype = dtype
-        self.ranges = ranges.astype(np.float32, copy = False)
+        self.dtype = np.float64 if precision == 'double' else np.float32
+        self.ranges = ranges.astype(self.dtype, copy = False)
         for i in range(ranges.shape[0]):
             if ranges[i,0] >= ranges[i,1]:
                 raise  ValueError(f"row {i}'s lower bound ({ranges[i, 0]} >= the upper bound ({ranges[i, 1]}). The upper bound must be greater than the lower bound)")
@@ -427,15 +438,20 @@ class MultiRealPM(LocalMutator):
     
     Mutates floats individually with polynomial mutation (PM)"""
     _supported_types = MultiRealRange
-    __slots__ = ("single_real_mutation_prob", "distribution_index")
+    __slots__ = ("mutation_proability", "distribution_index")
     
-    def __init__(self, single_real_mutation_prob = 0.1, distribution_index = 20.0):
-        self.single_real_mutation_prob = single_real_mutation_prob
+    def __init__(self, mutation_proability = 0.1, distribution_index = 20.0):
+        """
+        Args:
+            mutation_proability (float, optional): Defaults to 0.1.
+            distribution_index (float, optional): Controls the distribution of offspring values. Defaults to 20.0.
+        """        
+        self.mutation_proability = mutation_proability
         self.distribution_index = distribution_index
     
     def mutate(self, custom_type: MultiRealRange, offspring_solution, variable_index, **kwargs):
         
-        mutation_probability = self.single_real_mutation_prob
+        mutation_probability = self.mutation_proability
         if not mutation_probability:
             return
         num_floats = custom_type.ranges.shape[0]
@@ -461,35 +477,34 @@ class MultiRealPM(LocalMutator):
 class MultiDifferentialEvolution(LocalVariator):
     """A LocalVariator for a MultiRealRange
     
-    Applies differential evolution to individual floats or to individual offspring
+    Applies differential evolution to individual floats or to all the offspring's floats
     """
     _supported_types = MultiRealRange
     _supported_arity = (4,4)
     _supported_noffspring = (1,1)
-    __slots__ = ("real_crossover_rate", "real_step_size")
+    __slots__ = ("crossover_rate", "step_size", "all_or_none")
     
-    def __init__(self, real_crossover_rate = 0.1, real_step_size = 0.25, all_or_none = True):
+    def __init__(self, crossover_rate = 0.1, step_size = 0.25, all_or_none = True):
         """
         Args:
-            real_crossover_rate (float, optional): The frequency at which variables are evolved. Defaults to 0.1.
-            real_step_size (float, optional): _description_. Defaults to 0.25.
+            crossover_rate (float, optional):  Defaults to 0.1.
+            step_size (float, optional): Defaults to 0.25.
             all_or_none (bool, optional): Defaults to True.
             - If True, the probability gate applied to the offspring solution. If probability threshold is met, all floats are evolved.
             - If False, the probability gate applied to all floats individually.
             - Note, it is faster to apply the probability gate to the offspring instead of individual floats
         """        
-        self.real_crossover_rate = real_crossover_rate
-        self.real_step_size = real_step_size
+        self.crossover_rate = crossover_rate
+        self.step_size = step_size
         self.all_or_none = all_or_none
         
-    
     def evolve(self, custom_type: MultiRealRange, parent_solutions, offspring_solutions, variable_index, copy_indices, **kwargs):
 
-        crossover_rate = self.real_crossover_rate
+        crossover_rate = self.crossover_rate
+        step_size = self.step_size
         if not crossover_rate:
             return
-        step_size = self.real_step_size
-        
+
         nreals = custom_type.ranges.shape[0]
         parent_vals = self.get_no_copy_variables(parent_solutions, variable_index, copy_indices[0])
         
@@ -524,6 +539,10 @@ class MultiDifferentialEvolution(LocalVariator):
         
 
 class MultiPCX(LocalVariator):
+    """A LocalVariator for a MultiRealRange
+    
+    Applies parent-centric crossover to all floats the offspring solutions
+    """
     _supported_types = MultiRealRange
     _supported_arity = (2,None)
     _supported_noffspring = (1,None)
@@ -542,26 +561,30 @@ class MultiPCX(LocalVariator):
         zeta = self.zeta
         nparents = len(parent_solutions)
         nreals = custom_type.ranges.shape[0]
-        norm_parent_reals = np.empty((nparents, nreals), np.float32, order='C')
+        dtype = custom_type.ranges.dtype
+        
+        unique_copies=  self.group_by_copy(copy_indices) # parent -> offspring copies of parent
+        has_unlabeled = int(unique_copies.get(-1) is not None)
+        norm_parent_reals = np.empty((nparents + has_unlabeled, nreals), dtype, order='C')
         for i, par in enumerate(parent_solutions):
             gu_normalize2D_1D(custom_type.ranges, par.variables[variable_index], out = norm_parent_reals[i])
         
-        unique_copies=  self.group_by_copy(copy_indices) # parent -> offspring copies of parent
+        last_row = nparents - 1
         parent_to_row = np.arange(nparents, dtype=np.uint16)
-        parent_at_last_row = nparents - 1
+        parent_at_last_row = last_row 
         for parent_idx, offspring_indices in unique_copies.items():
             if parent_idx == -1:
                 continue
             
             new_reference_row = parent_to_row[parent_idx]
-            norm_parent_reals[[new_reference_row, -1]] = norm_parent_reals[[-1, new_reference_row]]
-            parent_to_row[parent_idx] = nparents -1
+            norm_parent_reals[[new_reference_row, last_row]] = norm_parent_reals[[last_row, new_reference_row]]
+            parent_to_row[parent_idx] = last_row 
             parent_to_row[parent_at_last_row] = new_reference_row
             parent_at_last_row = parent_idx
             # assert len(np.unique(parent_to_row)) == nparents
             
             # Evolve all offspring that were copied from parent_idx, convert to orig scale
-            offspring_values = normalized_2d_pcx(norm_parent_reals, len(offspring_indices), eta, zeta, randomize=False)
+            offspring_values = normalized_2d_pcx(norm_parent_reals[:last_row+1], len(offspring_indices), eta, zeta, randomize=False)
             gu_denormalize2D_2D(custom_type.ranges, offspring_values)
             
             for i, offspring_idx in enumerate(offspring_indices):
@@ -570,20 +593,16 @@ class MultiPCX(LocalVariator):
                 curr_offspring.evaluated = False
 
         unlabeled_offspring = unique_copies.get(-1)
-        if unlabeled_offspring: # Not copied from any solutions in parents_solutions
-            temp = None
+        if has_unlabeled: # Not copied from any solutions in parents_solutions, an extra row was added to 'norm_parent_reals'
+            unlabeled_offspring = unique_copies[-1]
             for offspring_idx in unlabeled_offspring:
                 curr_offspring = offspring_solutions[offspring_idx]
                 offspring_norm = gu_normalize2D_1D(custom_type.ranges, curr_offspring.variables[variable_index])
-                rand_row = np.random.randint(nparents)
-                norm_parent_reals[[rand_row, -1]] = norm_parent_reals[[-1, rand_row]]
-                temp = norm_parent_reals[-1]
                 norm_parent_reals[-1] = offspring_norm
                 
                 curr_offspring.variables[variable_index] = normalized_2d_pcx(norm_parent_reals, 1, eta, zeta, randomize=False)[0]
                 gu_denormalize2D_1D(custom_type.ranges, curr_offspring.variables[variable_index])
                 curr_offspring.evaluated = False
-                norm_parent_reals[-1] = temp
 
 class RealList(CustomType):
     """
@@ -598,6 +617,12 @@ class RealList(CustomType):
         real_list: list | tuple | np.ndarray,
         local_variator = None,
         local_mutator = None):
+        """
+        Args:
+            real_list (list | tuple | np.ndarray): The sequence of values to choose from
+            local_variator (LocalVariator, optional): Cannot be a LocalMutator, should have RealList registered in _supported_types. Defaults to None.
+            local_mutator (LocalMutator, optional): A LocalMutator, should have RealList registered in _supported_types. Defaults to None.
+        """        
         
         assert len(real_list) > 1, "The input sequence must have more than 1 element"
         
@@ -632,14 +657,14 @@ class RealListPM(LocalMutator):
     
     Uses polynomial mutation and finds the closest value"""
     _supported_types = RealList
-    __slots__ = ("real_mutation_prob", "distribution_index")
+    __slots__ = ("mutation_probability", "distribution_index")
     
-    def __init__(self, real_mutation_prob= 0.1, distribution_index = 20):
-        self.real_mutation_prob = real_mutation_prob
+    def __init__(self, mutation_probability = 0.1, distribution_index = 20):
+        self.mutation_probability = mutation_probability
         self.distribution_index = np.float32(distribution_index) 
     
     def mutate(self, custom_type: RealList, offspring_solution, variable_index, **kwargs):
-        mutation_prob = self.real_mutation_prob
+        mutation_prob = self.mutation_probability
         distribution_index = self.distribution_index
         
         if np.random.uniform() < mutation_prob:
@@ -659,7 +684,7 @@ class RealListDE(LocalVariator):
     
     Applies differential evolution and finds closest value"""
     _supported_types = RealList
-    _supported_arity = (4.4)
+    _supported_arity = (4, 4)
     _supported_noffspring = (1,1)
     __slots__ = ("crossover_rate", "step_size")
     
@@ -689,7 +714,7 @@ class RealListDE(LocalVariator):
 class RealListPCX(LocalVariator):
     """A LocalVariator for a RealList
     
-    Applies PCX and finds closest value"""
+    Applies parent-centric crossover and finds closest value"""
     
     _supported_types = RealList
     _supported_arity = (2,None)
@@ -698,8 +723,8 @@ class RealListPCX(LocalVariator):
 
     def __init__(self, pcx_rate = 0.25, eta = 0.25, zeta = 0.25):
         self.pcx_rate = pcx_rate
-        self.eta = np.float32(eta)
-        self.zeta = np.float32(zeta)
+        self.eta = eta
+        self.zeta = zeta
     
     def evolve(self, custom_type: RealList, parent_solutions, offspring_solutions, variable_index, copy_indices, **kwargs): #TODO find true val
         
@@ -709,21 +734,23 @@ class RealListPCX(LocalVariator):
         zeta = self.zeta
         nparents = len(parent_solutions)
         
-        norm_parent_reals = np.empty(nparents, np.float32, order='C')
+        unique_copies=  self.group_by_copy(copy_indices) # parent -> offspring copies of parent
+        has_unlabeled = int(unique_copies.get(-1) is not None)
+        norm_parent_reals = np.empty(nparents + has_unlabeled, np.float64, order='C')
         for i, par in enumerate(parent_solutions):
             norm_parent_reals[i] = _min_max_norm_convert(custom_type.reals[0], custom_type.reals[-1], par.variables[variable_index], True)
         
+        last_row  = nparents - 1
         parent_to_row = np.arange(nparents, dtype=np.uint16) # arr[parent_idx] = parent_row
-        unique_copies=  self.group_by_copy(copy_indices) 
-        parent_at_last_row = nparents -1
+        parent_at_last_row = last_row
         for parent_idx, offspring_indices in unique_copies.items():
             if parent_idx == -1:
                 continue
             
             # swap new reference parent to last row
             new_reference_row = parent_to_row[parent_idx]
-            norm_parent_reals[[new_reference_row, -1]] = norm_parent_reals[[-1, new_reference_row]]
-            parent_to_row[parent_idx] = nparents -1
+            norm_parent_reals[[new_reference_row, last_row]] = norm_parent_reals[[last_row, new_reference_row]]
+            parent_to_row[parent_idx] = last_row
             parent_to_row[parent_at_last_row] = new_reference_row
             parent_at_last_row = parent_idx
             # assert len(np.unique(parent_to_row)) == nparents
@@ -760,13 +787,13 @@ class StepMutation(LocalMutator):
     
     Mutates an offspring's value by incrementing up or down one step"""
     _supported_types = (SteppedRange, RealList)
-    __slots__ = ("step_mutation_prob")
+    __slots__ = ("mutation_probability")
     
-    def __init__(self, step_mutation_prob = 0.1):
-        self.step_mutation_prob = step_mutation_prob
+    def __init__(self, mutation_probability = 0.1):
+        self.mutation_probability = mutation_probability
     
     def mutate(self, custom_type: SteppedRange | RealList, offspring_solution, variable_index, **kwargs):
-        mutation_prob = self.step_mutation_prob
+        mutation_prob = self.mutation_probability
         if np.random.uniform() < mutation_prob:
             if isinstance(custom_type, SteppedRange):
                 offspring_solution.variables[variable_index] = _stepped_range_mutation(custom_type.lower_bound, custom_type.step, custom_type.max_step, offspring_solution.variables[variable_index])
@@ -797,7 +824,7 @@ class ArrayCrossover(LocalVariator):
     def __init__(self, array_crossover_rate = 0.2):
         """
         Args:
-            array_crossover_rate: Probability that an offspring array replaces sections  of parent arrays
+            array_crossover_rate: Probability that an offspring array replaces sections of parent arrays
                 The probability gate is applied to individual offspring solutions
         """   
         self.array_crossover_rate = array_crossover_rate

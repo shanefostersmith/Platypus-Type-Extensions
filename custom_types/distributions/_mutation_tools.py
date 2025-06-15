@@ -195,8 +195,6 @@ def separation_mutation(
     if width_change == 0:
         return output_min_x, output_max_x, None
     
-    # print(f"width_change: {width_change}, min_side_dist {min_side_dist}, max_side_dist {max_side_dist}")
-    
     new_out_min =  output_min_x
     new_out_max =  output_max_x
     abs_width_change = abs(width_change)
@@ -304,6 +302,7 @@ def count_mutation(all_x_bounds: BoundsViewMixin,
         max_removal_from_max = 0
         if output_max_x >= min_last_x + separation:
             max_removal_from_max = min(total_max_removal, (output_max_x - min_last_x) // separation)
+            
         
         if max_removal_from_min and (not max_removal_from_max or np.random.randint(2)):
             point_diff = -1 if max_removal_from_min == 1 else -1*np.random.randint(1, max_removal_from_min + 1)
@@ -311,17 +310,14 @@ def count_mutation(all_x_bounds: BoundsViewMixin,
         elif max_removal_from_max :
             point_diff = -1 if max_removal_from_max == 1 else -1*np.random.randint(1, max_removal_from_max + 1)
             return point_diff, False, None
-        # print(f'did not change subtract: {max_removal_from_min}, {max_removal_from_min}')
         return 0, False, None
     
     elif addition_valid:
         # Check how many points can be added in total
         total_max_addition = true_max_points - curr_num_points
-       
         if count_limit:
             total_max_addition= min(total_max_addition , count_limit)
         total_max_addition = min(total_max_addition, (curr_width - true_min_width) // separation)
-        # print(f"total_max_addition: {total_max_addition} for curr_width {curr_width} and true_min_width {true_min_width} and separation {separation}")
         # Check how many points can be added from each side
         max_addition_to_min = 0
         if output_min_x - separation >= x_min:

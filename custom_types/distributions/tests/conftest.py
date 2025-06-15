@@ -113,7 +113,7 @@ def _add_bound_option(bounds: PointBounds, curr_option, x_max, min_x_separation,
         bounds.set_min_separation(1e-8)
 
 @pytest.fixture
-def half_life_bounds(half_life_func, bound_options, x_max):
+def half_life_bounds(half_life_func, bound_options):
     """Return:
         forward_func, inverse_func, bounds (PointBounds, y_min, y_max
     """
@@ -231,7 +231,7 @@ def distribution_pcx(distribution_pcx_param, all_monotonic_distributions):
 def distribution_map_crossover(distribution_map_variator, all_monotonic_distributions):
     all_monotonic_distributions.ordinal_maps = distribution_map_variator == 'ordinal'
     y_based = distribution_map_variator == 'y_based'
-    all_monotonic_distributions.local_variator = FixedMapCrossover(0.999, y_based_map_crossover=y_based)
+    all_monotonic_distributions.local_variator = FixedMapCrossover(0.999, y_based_crossover=y_based)
     all_monotonic_distributions.do_evolution = True
     return all_monotonic_distributions
 
@@ -239,7 +239,7 @@ def distribution_map_crossover(distribution_map_variator, all_monotonic_distribu
 def distribution_map_mutation(distribution_map_variator, all_monotonic_distributions):
     all_monotonic_distributions.ordinal_maps = distribution_map_variator == 'ordinal'
     y_based = distribution_map_variator == 'y_based'
-    all_monotonic_distributions.local_variator = FixedMapConversion(0.999, y_based_map_conversion=y_based)
+    all_monotonic_distributions.local_variator = FixedMapConversion(0.999, y_based_conversion=y_based)
     all_monotonic_distributions.do_mutation = True
     return all_monotonic_distributions
 

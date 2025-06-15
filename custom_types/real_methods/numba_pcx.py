@@ -7,11 +7,12 @@ from numba import jit, njit, guvectorize, typeof, types, prange, uint32, float32
 """
 Two methods for PCX using static typing:
     - normalized_1d_pcx() -> one variable case
-    - normalized_2d_pcx() -> multi-variable case (i.e. usual case)
-
+    - normalized_2d_pcx() -> multi-variable case
+Three methods of Gram-Schmidt process (modified, classic, batch)
 """
 
 EPSILON = float_info.epsilon
+seed = np.random.seed()
 _sig_tuple = namedtuple('signatures', ['valid32','valid64','invalid32','invalid64', 'cgs32', 'cgs64', 'offspring32', 'offspring64'] )
 S = _sig_tuple(
     valid32 = types.Tuple((float32[:, :], float32, uint32))(float32[:, :], uint32, uint32, float32[:], float32[:], float32[:, :]),
@@ -313,7 +314,7 @@ def _classic_gs(
     return out, D, n_non_zero
 
 
-@njit([S.offspring32, S.offspring64])
+# @njit([S.offspring32, S.offspring64])
 def _find_offspring_pcx(
     parent_vars:np.ndarray, 
     noffspring: np.uint32,
@@ -352,12 +353,14 @@ def _find_offspring_pcx(
         for offspring in range(noffspring): #eta perturbation
             eta_D = np.random.normal(0.0,eta) * D
             output[offspring] += eta_D * eta_sum
-            
+    
     np.clip(output, 0.0, 1.0, output)
     return output
 
 @njit([float32[:](float32[:], types.uint32, float32, float32, boolean),
-      float64[:](float64[:], types.uint32, float64, float64, boolean)])
+       float32[:](float32[:], types.uint32, float64, float64, boolean),
+       float64[:](float64[:], types.uint32, float32, float32, boolean),
+       float64[:](float64[:], types.uint32, float64, float64, boolean)])
 def normalized_1d_pcx(
     parent_vars: np.ndarray, 
     noffspring: np.uint32, 
@@ -365,14 +368,24 @@ def normalized_1d_pcx(
     zeta: np.float32,
     randomize = True):
     """
-    PCX where each parent has 1 variable. Updated so that both eta and zeta are still used
+    Special case of PCX where each parent has 1 variable
     
     Expects all parent_vars elements to be normalized to [0,1] prior to input
     
     There should be more than 1 parent
-    
-   
-    """   
+
+    Args:
+        parent_vars (np.ndarray): A 1D ndarray
+        noffspring (np.uint32): The number of offspring to produce
+        eta (np.float32): Controls the distribution of output values (bias toward non-reference parents)
+        zeta (np.float32): Controls the distribution of output values (bias toward reference parent)
+        randomize (bool, optional): Defaults to True.
+            - If True, randomize which parent is the 'reference' parent for each output offspring 
+            - If False, the parent in the last index of 'parent_vars' is the reference parent for all offspring
+
+    Returns:
+        np.ndarray: A 1D array of length `noffspring`
+    """
     k = len(parent_vars)
     if k == 0:
         return np.zeros(noffspring, parent_vars.dtype)
@@ -423,7 +436,6 @@ def normalized_1d_pcx(
         
     return offspring
 
-
 def normalized_2d_pcx(
     parent_vars: np.ndarray, 
     noffspring, 
@@ -435,13 +447,22 @@ def normalized_2d_pcx(
     
     Expects all parent_vars elements to be normalized to [0,1] prior to input
 
-    Expects parent_vars to be a 2D npndarray of type float32
-    
     There should be more than 1 parent
-    
-    """    
-    noffspring = np.uint8(noffspring)
-    nparents = np.uint8(parent_vars.shape[0])
+
+    Args:
+        parent_vars (np.ndarray): A 2D ndarray of type float32 or float64. Each row represent a vector of parent values.
+        noffspring (int): The number of offspring to produce, ie. the number of rows in the output matrix
+        eta (np.float32): Controls the distribution of output values (bias toward non-reference parents)
+        zeta (np.float32): Controls the distribution of output values (bias toward reference parent)
+        randomize (bool, optional): Defaults to True.
+            - If True, randomize which parent is the 'reference' parent for each output offspring 
+            - If False, the parent in the last row of 'parent_vars' is the reference parent for all offspring
+
+    Returns:
+        np.ndarray: Shape `(noffspring, parent_vars.shape[1])`
+    """      
+    noffspring = np.uint32(noffspring)
+    nparents = np.uint32(parent_vars.shape[0])
     nvars = np.uint32(parent_vars.shape[1])
     dtype = parent_vars.dtype
     if nparents == 0:
@@ -460,8 +481,6 @@ def normalized_2d_pcx(
         output[:,0] = normalized_1d_pcx(all_vars, noffspring, eta, zeta, randomize) #TODO: See if can reshape, and if it is faster
         return output
     
-    # mean of each var
-    # g = np.empty(nvars, np.float32)
     g = _find_g(parent_vars)
     if noffspring == 1 or not randomize:
         if randomize:
@@ -477,10 +496,9 @@ def normalized_2d_pcx(
     for rand_p in (np.random.randint(nparents) for _ in range(noffspring)):
         new_count = count_dict.get(rand_p, 0) + 1
         count_dict[rand_p] = new_count
-    
+        
     curr_row = 0
     for parent_idx, count in count_dict.items():
-        
         parent_vars[[parent_idx, -1]] = parent_vars[[-1, parent_idx]]
         e0, _=  _vectorized_subtract(parent_vars[-1], g)
         e_eta = np.zeros((nparents-1,nvars), dtype, order = 'C')

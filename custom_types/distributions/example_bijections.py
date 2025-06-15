@@ -29,7 +29,7 @@ def half_life_bijection(y_min, y_max, T, m, max_y_separation):
     Raises:
         ValueError: If `m` <= 0 
         ValueError: If `T` == 0
-        ValueError: If `y_min >= y_max` or `y_min + last_y_separation >= y_max`
+        ValueError: If `y_min >= y_max` or `y_min + max_y_separation >= y_max`
 
     Returns:
         tuple[functools.partial, functools.partial, float, int]

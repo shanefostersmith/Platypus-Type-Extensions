@@ -12,3 +12,4 @@ __pycache__/
 *.egg
 *.whl
 .DS_Store
+*.DS_Store

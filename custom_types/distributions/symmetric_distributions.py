@@ -9,7 +9,15 @@ from ..utils import clip
 from math import ceil, floor
 
 class SymmetricDistributions(MonotonicDistributions):
-    """(in progress)"""
+    """**Evolve and mutate a discrete set of symmetric distributions in the form of 1-D numpy arrays.**
+    
+    This is a subclass of MonotonicDistributions
+    - SymmetricDistributions is compatibile with all of the same LocalVariators and LocalMutators
+    - MonotonicDistributions and SymmetricBijection share the same decoded return type
+    - The only difference is that SymmetricBijections are the input maps (instead of RealBijections).
+    
+    (See *SymmetricBijection* and *MonotonicDistributions*)
+    """
     
     def __init__(
         self, 
@@ -18,6 +26,16 @@ class SymmetricDistributions(MonotonicDistributions):
         local_mutator = None,
         ordinal_maps = False,
         ):
+        """
+        Args:
+            mappings (Iterable[SymmetricBijection]): An iterable of SymmetricBijections with the inverse functions set.
+            local_variator (LocalVariator, optional): Cannot be a LocalMutator, should have MonotonicDistributions or SymmetricDistributions registered in _supported_types. Defaults to None.
+            local_mutator (LocalMutator, optional): A LocalMutator, should have MonotonicDistributions or SymmetricDistributions registered in _supported_types. Defaults to None.
+            ordinal_maps (bool, optional): Indicates that the SymmetricBijection objects are inputted in some sort of order. Defaults to False.
+            
+        Raises:
+            TypeError: If any of the input maps are not a SymmetricBijection
+        """        
         
         for i, map in enumerate(mappings):
             if not isinstance(map, SymmetricBijection):

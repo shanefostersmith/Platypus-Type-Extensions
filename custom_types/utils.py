@@ -17,68 +17,6 @@ def _min_max_norm_convert(min_val, max_val, curr_val, to_norm):
         return 1.0 if max_val == min_val else (curr_val - min_val) / (max_val - min_val)
     return curr_val * (max_val - min_val) + min_val
 
-def vectorized_to_norm(ranges: np.ndarray, values: np.ndarray, in_place = False):
-    """Convert a 1D or 2D array of values to 0-1 range
-    
-    This function assumes there are no zero-width ranges
-
-    Args:
-        ranges (np.ndarray): 2D array where the number of columns = 2 
-            (column 0 contains lower bounds and column 1 contains upper bounds)
-        values (np.ndarray): 1D or 2D array of floats
-        
-            If 1D, must be true that:
-            ``len(values) == ranges.shape[0]``
-            
-            If 2D, must be true that: ``values.shape[1] == ranges.shape[0]``
-    Returns:
-        np.ndarray: (same shape as input values)
-    """    
-    mins = ranges[:, 0]
-    denoms= ranges[:, 1] - mins 
-    if not in_place:
-        normalized = np.empty_like(values, dtype=np.float64)
-        np.subtract(values, mins, out=normalized)
-        np.divide(normalized, denoms, out=normalized)
-        return normalized
-    else:
-        np.subtract(values, mins, out=values)
-        np.divide(values, denoms, out=values)
-        return values
-
-def vectorized_from_norm(ranges: np.ndarray, values: np.ndarray, dtype: type = None, in_place = False):
-    """Convert a 1D or 2D array of values from 0-1 range to their original scale
-    
-    This function assumes there are no zero-width ranges
-
-    Args:
-        ranges (np.ndarray): 2D numpy array where number of columns = 2 
-            (column 0 contains lower bounds and column 1 contains upper bounds)
-        values (np.ndarray): 1D or 2D array of floats
-            If 1D, must be true that:
-            ``len(values) == ranges.shape[0]``
-            
-            If 2D, must be true that: ``values.shape[1] == ranges.shape[0]``
-            
-        dtype (type): Should be a numpy float type
-
-    Returns:
-        np.ndarray: 1D array of floats
-    """    
-    mins = ranges[:, 0]
-    diffs = ranges[:, 1] - mins 
-    if not in_place:
-        dtype = dtype or np.float32
-        original_scale = np.empty_like(values, dtype=dtype)
-        np.multiply(values, diffs, out=original_scale)
-        np.add(original_scale, mins, out=original_scale)
-        return original_scale
-    else:
-        np.multiply(values, diffs, out=values)
-        np.add(values, mins, out=values)
-        return values
-
-
 gu_scale_2Dsig = [
     (float32[:,:], float32[:,:], float32[:,:]), 
     (float64[:,:], float64[:,:], float64[:,:]),
@@ -167,6 +105,67 @@ def gu_denormalize2D_2D(ranges, values):
         d = ranges[v,1] - lb
         for r in range(nvectors):
             values[r, v] = (values[r,v] * d) + lb
+
+def vectorized_to_norm(ranges: np.ndarray, values: np.ndarray, in_place = False):
+    """Convert a 1D or 2D array of values to 0-1 range
+    
+    This function assumes there are no zero-width ranges
+
+    Args:
+        ranges (np.ndarray): 2D array where the number of columns = 2 
+            (column 0 contains lower bounds and column 1 contains upper bounds)
+        values (np.ndarray): 1D or 2D array of floats
+        
+            If 1D, must be true that:
+            ``len(values) == ranges.shape[0]``
+            
+            If 2D, must be true that: ``values.shape[1] == ranges.shape[0]``
+    Returns:
+        np.ndarray: (same shape as input values)
+    """    
+    mins = ranges[:, 0]
+    denoms= ranges[:, 1] - mins 
+    if not in_place:
+        normalized = np.empty_like(values, dtype=np.float64)
+        np.subtract(values, mins, out=normalized)
+        np.divide(normalized, denoms, out=normalized)
+        return normalized
+    else:
+        np.subtract(values, mins, out=values)
+        np.divide(values, denoms, out=values)
+        return values
+
+def vectorized_from_norm(ranges: np.ndarray, values: np.ndarray, dtype: type = None, in_place = False):
+    """Convert a 1D or 2D array of values from 0-1 range to their original scale
+    
+    This function assumes there are no zero-width ranges
+
+    Args:
+        ranges (np.ndarray): 2D numpy array where number of columns = 2 
+            (column 0 contains lower bounds and column 1 contains upper bounds)
+        values (np.ndarray): 1D or 2D array of floats
+            If 1D, must be true that:
+            ``len(values) == ranges.shape[0]``
+            
+            If 2D, must be true that: ``values.shape[1] == ranges.shape[0]``
+            
+        dtype (type): Should be a numpy float type
+
+    Returns:
+        np.ndarray: 1D array of floats
+    """    
+    mins = ranges[:, 0]
+    diffs = ranges[:, 1] - mins 
+    if not in_place:
+        dtype = dtype or np.float32
+        original_scale = np.empty_like(values, dtype=dtype)
+        np.multiply(values, diffs, out=original_scale)
+        np.add(original_scale, mins, out=original_scale)
+        return original_scale
+    else:
+        np.multiply(values, diffs, out=values)
+        np.add(values, mins, out=values)
+        return values
 
 def int_to_gray_encoding(value: int, min_value: int, max_value: int, nbits: int | None = None) -> np.ndarray:
     """

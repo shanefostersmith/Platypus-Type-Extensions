@@ -79,7 +79,7 @@ THREE_STRATEGIES = [p for p in permutations(SELECTION_STRATEGIES) if p[0] != 'sw
 def single_offspring_selection(request):
     return request.param
 
-@pytest.fixture(params = [(2, 1), (2,4), (4,4), (5,2)], ids = lambda v: f"nparents={v[0]}, noffspring={v[1]}")
+@pytest.fixture(params = [(2, 1), (2,4), (3,3), (4,2)], ids = lambda v: f"nparents={v[0]}, noffspring={v[1]}")
 def nparents_and_noffspring(request):
     return request.param
 

@@ -14,7 +14,7 @@ from ._bounds_tools import BoundsState, _cascade_from_global
 class RealBijection:
     """ 
     `
-    **A class for creating bijections between two sets of real values**.
+    **A class for creating bijections between two real valued domains**.
     
     This class is used for evolving and mutating sets of real `x` numbers that map to `y = f(x)` values, and the parameters that define that mapping, as a *single* optimization variable. 
     
@@ -130,85 +130,75 @@ class RealBijection:
         etc...
     """
    
-    def __init__(self, 
-                 forward_function: Union[callable, partial], 
-                 x_point_bounds: PointBounds | BoundsState,
-                 inverse_function: Union[callable, partial] | None = None, 
-                 fixed_forward_keywords: dict = {}, 
-                 fixed_inverse_keywords: dict = {}, 
-                 compute_y_bounds: bool = True, 
-                 y_min = None, 
-                 y_max = None, 
-                 direction: bool | None = None, 
-                 raise_execution_errors: bool = True, 
-                 unique_id: Union[Hashable, None] = None):
-        """ 
+    def __init__(
+        self, 
+        forward_function: Union[callable, partial], 
+        x_point_bounds: PointBounds | BoundsState,
+        inverse_function: Union[callable, partial, None]  = None, 
+        fixed_forward_keywords: dict = {}, 
+        fixed_inverse_keywords: dict = {}, 
+        compute_y_bounds: bool = True, 
+        y_min = None, 
+        y_max = None, 
+        direction: bool | None = None, 
+        raise_execution_errors: bool = True, 
+        unique_id: Union[Hashable, None] = None):
+        """
         Args:
-        
-            **forward_function** (Union[callable, partial]): The function mapping `x` values to `y` values (see notes on functions below)
-            
-            **x_point_bounds** (PointBounds | BoundsState): All bounds for the `x` number line, and the bounds for placing points on that line (see `PountBounds`). Defaults to None
-                        - Can also be a `BoundsState` object, which created with `PointBounds.create_bounds_state()`. This is a more compact version of PointBounds, but does not have "setter" methods.
-                        
-            **inverse_function** (Union[callable, partial]): The function mapping `y` values to `x` values (see notes on functions below). Defaults to None
-            
-            **fixed_forward_args** (dict, optional): Fixed parameter values for the *forward_function*, excluding than the input `x` value. Defaults to empty dictionary.
-                -   If inputted *forward_function* is not a `functools.partial` object, these keyword arguments will be used to create one (if more than one parameter exists in the function)
-                -   See example below
-                
-            **fixed_inverse_args** (dict, optional): Fixed parameter values for the *inverse_function*, excluding than the input `y` value.. Defaults to empty dictionary.
-                -   Same as *fixed_forward_args*, but for the inverse function
-            
-            **compute_y_bounds**: If True, all y_bounds are computed with the forward function. The direction attribute will also be set. Defaults to True.
-            
-            **y_min** A `y` bound value. Defaults to None.
+            forward_function (Union[callable, partial]): The function mapping `x` values to `y` values (see notes on functions below)
+            x_point_bounds (PointBounds | BoundsState): All bounds for the `x` number line, and the bounds for placing points on that line (see `PountBounds`). Defaults to None
+            inverse_function (Union[callable, partial, None], optional): The function mapping `y` values to `x` values (see notes on functions below). Defaults to None.
+            fixed_forward_keywords (dict, optional): Fixed parameter values for the *forward_function*, excluding than the input `x` value. Defaults to {}.
+                -  If inputted *forward_function* is not a `functools.partial` object, these keyword arguments will be used to create one (if more than one parameter exists in the function)
+                -  See example below
+            fixed_inverse_keywords (dict, optional): Fixed parameter values for the *inverse_function*, excluding than the input `y` value. Defaults to {}.
+            compute_y_bounds (bool, optional): If True, all y_bounds are computed with the forward function. The direction attribute will also be set. Defaults to True.
+            y_min (float, optional): A `y` bound value. Defaults to None.
                 - May be an lower or upper bound value depending on the direction of the function(s) (see *direction*)
                 - Must be None, or less than or equal to *y_max* 
                 - If compute_y_bounds is True, this parameter is ignored
-            
-            **y_max**: A `y` bound value. Defaults to None.
+            y_max (float, optional): A `y` bound value. Defaults to None.
                 - May be an lower or upper bound value depending on the direction of the function (see *direction*)
                 - Must be None, or greater than or equal to *y_min*
                 - If compute_y_bounds is True, this parameter is ignored
-            
-            **direction**: Defaults to None.
-                - If False (or 0) indicates that the foward / inverse function is *increasing*
-                    - The lower bound is `(xmin, ymin)`  and the upper bound is `(xmax, ymax)`
-                - If True (or 1), indicates that the forward / inverse function is *decreasing*
-                    - The lower bound is `(xmin, ymax)` and the upper bound is `(xmax, ymin)`
+            direction (bool | None, optional): Defaults to None.
+                - If False (or 0) indicates that the foward / inverse function is *increasing*.
+                    The lower bound is `(xmin, ymin)`  and the upper bound is `(xmax, ymax)`
+                - If True (or 1), indicates that the forward / inverse function is *decreasing*.
+                    The lower bound is `(xmin, ymax)` and the upper bound is `(xmax, ymin)`
                 - If None, indicates the direction of the forward / inverse function is unknown, or that the function(s) are not decreasing or increasing.
-                    - It will be assumed that the lower and upper bound  is `(xmin, ymin)` and `(xmax, ymax)` (like an increasing function)
+                    It will be assumed that the lower and upper bound  is `(xmin, ymin)` and `(xmax, ymax)` (like an increasing function)
                 - If compute_y_bounds is True, this parameter is ignored
-
-            **raise_execution_errors**: Whether an error is raised or None is returned when an error occurs calling `forward_map(x)` or `inverse_map(y)`. Defaults to True.
+            raise_execution_errors (bool, optional): Whether an error is raised or None is returned when an error occurs calling `forward_map(x)` or `inverse_map(y)`. Defaults to True.
                 - If True, the error is raised. If False, None is returned. 
-                
-            **unique_id** (Any, Union[Hashable, None]): The identifer of this bijection.
+            unique_id (Union[Hashable, None], optional): The identifer of this bijection. Defaults to None.
                 - If one is not provided, a `uuid4` object will be used (see `uuid` docs and notes below)
                 - This allows `RealBijection` objects to be used in sets, dictionaries, etc.
 
-        Important Notes
-        -----
-        **Note on Mapping Functions**
-            - The `x` and `y` input values *must* be the first positional argument of the forward and inverse functions
-                - (See example below)
-            - Unless you plan to update the keyword parameters later, all parameters without default values (other than the first positional argument), 
-            should be set in the `functools.partial` objects and/or provided by *fixed_forward_args* and *fixed_inverse_args*. 
-            -  Since the first positional argument (`x` and `y`) of a function should not be provided, this implies that a `functools.partial` object should not have any positional arguments set.
-            - A "fixed" map just means that the required keyword parameters' values are known, but any keyword parameter value can be updated at any time.
-            
-        **Note on Multi-Processing**
-            - If you plan to use a `RealBijection` in a multiprocessing algorithm (and/or as shared memory), the mappings functions be should defined globally (i.e not returned or defined inside another function or class). 
-            More generally, mappings functions and their argument types must be pickleable. If both the *unique_id* and mappings functions are pickleable, then `RealBijection` objects are also pickleable. 
-                - (See example below)
-            - If providing a *unique_id*, and you plan to create these *RealBijection* objects during a process, ensure that the *unique_id* is safe for multiprocessing / multithreading. It is also important to ensure that these ids are actually unique.
+        Raises:
+            ValueError: If 'x_point_bounds' is not a PointBounds or BoundsState object
+            ValueError: If 'unique_id' is provided and not hashable
+            ValueError: If 'y_min' and 'y_max' are provided and `y_min > y_max`
+
+        Note on Mapping Functions
+        ---
+        - The `x` and `y` input values *must* be the first positional argument of the forward and inverse functions
+        - Unless you plan to update the keyword parameters later, all parameters without default values (other than the first positional argument), 
+        should be set in the `functools.partial` objects or provided by *fixed_forward_args* and *fixed_inverse_args*. 
+        - Since the first positional argument (`x` and `y`) of a function should not be provided, this implies that a `functools.partial` object should not have any positional arguments set.
+        - A "fixed" map means that the required keyword parameters' values are known, but any keyword parameter value can be updated at any time.
+
+        Note on Multiprocessing
+        ---
+        - If you plan to use a `RealBijection` in a multiprocessing algorithm (and/or as shared memory), the mappings functions be should defined globally (not returned or defined inside another function or class). 
+        More generally, mappings functions and their argument types must be pickleable. If both the *unique_id* and mappings functions are pickleable, then `RealBijection` objects are also pickleable. 
+        - If providing a *unique_id*, and you plan to create these *RealBijection* objects during a process, ensure that the *unique_id* is safe for multiprocessing / multithreading. It is also important to ensure that these ids are actually unique.
             - If a *unique_id* is not provided, `uuid4` is used as default. **Although *uuid4* is usually multiprocessing-safe, this is not guaranteed and may depend on your operating system**. 
-            You can the check the multiprocessing safety of a `uuid` object with `uuid.SafeUUID()` (see the `uuid` docs).
-            - Note that, this class currently doesn't provide any guarantees on the synchronization of 'set' operations. If updating bounds or parameters during multiprocessing, synchronization logic will have to implemented elsewhere. 
-            For mutations and evolutions, these operations generally happen *between* the multi-processed evaluations; in this case, synchronization of set operations is not required.
-        
+        - Note that, this class currently doesn't provide any guarantees on the synchronization of 'set' operations. If updating bounds or parameters during multiprocessing, synchronization logic will have to implemented elsewhere. 
+            - For mutations and evolutions, these operations generally happen *between* the multi-processed evaluations; in this case, synchronization of set operations is not required.
+            
         An Example
-        ------
+        ---
         
                     def linearForward(x, m, b):
                         return (m * x) + b
@@ -226,18 +216,16 @@ class RealBijection:
                             functools.partial(linearInverse, m = m, b = b)
                         )
                  
-        The returned *functools.partial* objects of *simple_linear_bijection()* can be inputted into the initialization function and the "forward" and "inverse" functions. 
+        The returned *functools.partial* objects returned by *simple_linear_bijection()* can be inputted "forward" and "inverse" function. 
         
         Equivalently, the *linearForward()* and *linearInverse()* functions can be inputted directly, 
         and dictionaries with `m` and `b` key-value pairs could be provided as the *fixed_forward_args* and *fixed_inverse_args* parameters.
             (Alternatively, they could be provided at a later time with the *update_keyword_args()* method)
             
-        If a lower x and upper x bound are provided, then the y bounds could be computed automatically with *compute_missing_bounds*. 
-        If y_min and y_max are provided, then the x bounds could be computed with *compute_missing_bounds*.
+        If a lower x and upper x bound are provided, then the y bounds could be computed automatically with *compute_y_bounds*. 
         
-        If m > 0, the direction should be set to `False` (or `True` if m < 0). The direction could also be set automatically with *compute_missing_bounds*
-            
-        """  
+        If m > 0, the direction should be set to `False` (or `True` if m < 0). The direction could also be set automatically with *compute_y_bounds*
+        """        
         self._id = None 
         if unique_id is not None:
             if not isinstance(unique_id, Hashable):
@@ -656,25 +644,17 @@ def compute_and_set_missing_y_bounds(
     set_direction = True, 
     raise_execution_errors = True,
     ):
-    """`
-    
-    Find and set a `RealBijection` object's missing y-bound values with its x-bound values and forward map"
-    
-          
+    """
+    Find and set a `RealBijection` object's missing y-bound values with its x-bound values and forward map
+           
     See `RealBijection`
 
     Args:
         bijection (RealBijection): A RealBijection object
-        
         set_direction (bool, optional): If a direction can be determined, set the direction in the RealBijection. Defaults to True.
-        
-            - Determined by whether a lower x bound and/or upper x bound value mapped to a smaller/greater y value)
-
-            - Can only be determined if computing both y bounds, or computing one y bound and one is already known
-               
         raise_execution_errors (bool, optional): Defaults to True.
-            If error occurs executing a lower or upper 'x' bound value with the forward map, determines whether a warning or error is raised. 
-            In either case, y bounds will not be set if unable to map a known lower or upper bound x value to a y value
+            - If error occurs executing a lower or upper 'x' bound value with the forward map, determines whether a warning or error is raised. 
+            - In either case, y bounds will not be set if unable to map an x bound value to a y bound value
     """    
 
     point_bounds = bijection.point_bounds
@@ -720,36 +700,17 @@ def compute_and_set_new_x_bounds(
     set_direction = True, 
     raise_execution_errors = True
     ):
-    """`
-    
-    Find and set a `RealBijection` object's missing x-bound values with its y-bound values and inverse map"
-    
-    Will do nothing if not all y-bounds are set
-    
-    Will raise an error if the computed/known lower x bound an upper x bound values are equal
-    
-    Note:
-        - If both y-bound values are known, and one x-bound value is already set, this function will override that x-bound value
-            
-        - **If both x bounds values will be known after the computing missing values, it is highly recommended that "set_direction" be True**
-  
-            - Setting the direction allows you to know which y-bound corresponds to the lower x bound and which corresponds to the upper x bound
-                - (For decreasing functions, the greater y-bound value corresponds with the lower x bound, and vice versa)
+    """
+    Find and set a `RealBijection` object's missing x-bound values with its y-bound values and inverse map
                 
     See `RealBijection`
 
     Args:
         bijection (RealBijection): A RealBijection object
-        
-        set_direction (bool, optional): If a direction can be determined, set the direction in the RealBijection. Defaults to True.
-        
-            - Determined by whether a smaller y bound and/or greater y bound value mapped to a smaller/greater x value)
-
-            - Can only be determined if computing both x bounds, or computing one x bound and one is already known
-            
+        set_direction (bool, optional): If a direction can be determined, set the direction in the RealBijection. Defaults to True  
         raise_execution_errors (bool, optional): Defaults to True.
-            If error occurs executing a lower or upper 'y' bound value with the inverse map, determines whether a warning or error is raised. 
-            In either case, x bounds will not be set if unable to map a known lower or upper bound y value to a x value
+            - If error occurs executing a lower or upper 'y' bound value with the inverse map, determines whether a warning or error is raised. 
+            - In either case, x bounds will not be set if unable to map a known lower or upper bound y value to a x value
     """
     if bijection.inverse_function is None:
         warn("No inverse mapping function has been set. Cannot compute x bounds from y bounds")

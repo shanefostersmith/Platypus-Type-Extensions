@@ -1,12 +1,12 @@
 import numpy as np
 import custom_types._tools as tools
 import contextvars
-from platypus import Solution, Problem, Variator, Mutation
+from platypus import Solution, Problem, Variator
 from platypus.types import Type as PlatypusType
 from warnings import warn
 from abc import ABCMeta, abstractmethod
 from multiprocessing import Value
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from typing import Any, Type, Literal, Union, Generator
 from types import MethodType
 from copy import deepcopy
@@ -24,7 +24,7 @@ class CustomType(PlatypusType):
     
     The purpose of a CustomType is to:
         - Streamline the global evolution and mutation of optimization variables across heterogeneous types 
-        - Allow instances of the *same* CustomType to evolve and mutate in different ways when those instances represent very different "things"
+        - Allow variables of the *same* type to evolve and mutate in different ways when those instances represent very different "things"
         - Allow for highly customizable, non-uniform behavior at the global scope (staggered convergence, variable dropouts, etc.)
         - Specify encoding/decoding memoization and deepcopy behavior 
     
@@ -34,7 +34,7 @@ class CustomType(PlatypusType):
     These flags are automatically set at initialization (depending on the input LocalVariator types)
     
     This class also allows caching / memoization of encoded variable -> decoded variable mapping. 
-    A CustomType variable may have an expensive decoding operation; if there is a low probability that an encoded variable will mutate and/or if the same encoding are likely to appear many times, 
+    A CustomType variable may have an expensive decoding operation; if the same encoding are likely to appear many times throughout an optimization, 
     then temporarily storing the mapping can increase computational efficiency.
     
     There are two types of memoization that can be implementated
@@ -53,9 +53,9 @@ class CustomType(PlatypusType):
                  encoding_memoization_type: Literal['cache', 'single'] | None  = None,
                  max_cache_size = 25):
         """
-        Must provide at least one of *local_variator* or *local_mutator* 
-        
         If both a *local_variator* and *local_mutator* are provided, then a `LocalGAOperator` is automatically created
+
+        If either a *local_variator* or *local_mutator* is provided, the *do_evolution* and *do_mutation* flags will automatically be set
 
         Args:
             local_variator (LocalVariator | None, optional): A LocalVariator or None. Defaults to None.
@@ -64,7 +64,7 @@ class CustomType(PlatypusType):
                 - Must be a LocalMutator and must contain this CustomType subclass in _supported_types
             encoding_memoization_type (Literal[&#39;cache&#39;, &#39;single&#39;] | None, optional): A memoization technique for encoded variables -> decoded variables. Defaults to None.
                 - 'cache': Store encoding / decoding mappings with an LRU cache 
-                - 'single': *experimental* Stores a single encoding / decoding between evaluations
+                - 'single': (*experimental*) Stores a single encoding / decoding between evaluations
                 - (see class doc strings for more details and variable requirements)
             max_cache_size (int, optional): If *encoding_memoization_type* is a cache, specify the LRU cache size. Defaults to 25.
 
@@ -81,35 +81,17 @@ class CustomType(PlatypusType):
             )
         
         # check local variators
-        self.local_variator = local_variator
-        # print(f"LOCAL VARIATOR: {local_variator!r}")
+        self.local_variator = None
         self._mut = None
         self.do_evolution = None
         self.do_mutation = None
-        # self.do_evolution = Value('b', False)
-        # self.do_mutation = Value('b', False)
         if local_variator is not None and local_mutator is not None:
             self.local_variator = LocalGAOperator(local_variator, local_mutator)
-            self.do_evolution = True
-            self.do_mutation = True
-        elif local_variator is None and local_mutator is None:
-            self.do_evolution = False
-            self.do_mutation = False
-        elif local_variator is None and local_mutator is not None:
+        elif local_mutator is not None:
             self.local_variator = local_mutator
-            self.do_mutation = True
-            self.do_evolution = False
-        elif isinstance(local_variator, LocalGAOperator):
-            self.do_evolution = True
-            self.do_mutation = True
-        elif isinstance(local_variator, LocalSequentialOperator):
-            self.do_mutation = local_variator._contains_mutation
-            self.do_evolution = local_variator._contains_crossover 
-        elif isinstance(local_variator, LocalVariator):
-            self.do_evolution = True
-            self.do_mutation = False
-            
-        # print(f"sp_types: {type(self.local_variator)._supported_types}")
+        else:
+            self.local_variator = local_variator
+
         if self.local_variator is not None and not type(self) in self.local_variator._supported_types:
             raise ValueError(f"The CustomType {type(self).__name__} is not a valid type for the input LocalVariator {local_variator!r}. If not a compound/sequential operator, consider registering type")
         
@@ -117,7 +99,7 @@ class CustomType(PlatypusType):
         self._mem_decode = None
         self._enc_temp = None
         
-        if encoding_memoization_type == 'cache':
+        if encoding_memoization_type == 'cache' and max_cache_size > 0:
             self.decode = lru_cache(max_cache_size)(self.decode)
         elif encoding_memoization_type == 'single':
             self._enc_temp = [None, None]
@@ -154,10 +136,30 @@ class CustomType(PlatypusType):
             raise ValueError(f"The number of copy_indices ({len(copy_indices)}) is not equal to the number of offspring Solutions ({noffspring})")
         if not self.in_arity_noffspring_limits(nparents, noffspring):
             warn(f"The number of parents solution {nparents} and number of offspring solution {noffspring} is not compatible with this CustomType's LocalVariator {self.local_variator!r}. \n The LocalVariator was not executed")
-            # print("HERE ")
             return
         self.local_variator.evolve(self, parent_solutions, offspring_solutions, variable_index, copy_indices, **kwargs)
     
+    def _set_flags(self):
+        """ Used to update do_evolution / do_mutation flags if a new LocalVariator is set
+        """
+        if not (hasattr(self, 'do_evolution') and hasattr(self, 'do_mutation')):
+            return
+        if self.local_variator is None or not isinstance(self.local_variator, LocalVariator):
+            self.do_evolution = False
+            self.do_mutation = False
+        elif isinstance(self.local_variator, LocalGAOperator):
+            self.do_evolution = True
+            self.do_mutation = True
+        elif isinstance(self.local_variator, LocalMutator):
+            self.do_evolution = False
+            self.do_mutation = True
+        elif isinstance(self.local_variator, LocalSequentialOperator):
+            self.do_mutation = self.local_variator._contains_mutation
+            self.do_evolution = self.local_variator._contains_crossover 
+        else: # isinstance(self.local_variator, LocalVariator)
+            self.do_evolution = True
+            self.do_mutation = False
+            
     def _can_evolve(self):
         if self.local_variator is None:
             return False
@@ -171,13 +173,13 @@ class CustomType(PlatypusType):
             return self.do_evolution or self.do_mutation
         return self.do_evolution
         
-        return True
-    
     def __setattr__(self, name, value):
         super().__setattr__(name, value)
         if name in ('do_mutation', 'do_evolution'):
             if hasattr(self, 'do_mutation') and hasattr(self, 'do_evolution'):
                 self._mut = self._can_evolve()
+        elif name == 'local_variator':
+            self._set_flags()
 
 class StandardCrossover(Enum):
     """
@@ -244,7 +246,6 @@ class LocalVariator(metaclass = ABCMeta):
     
     Attributes
     ---
-    
     _supported_types : tuple[Type["CustomType" | "PlatypusType"]]
         The one or more CustomTypes (or Platypus Types) this variator operates on. There is usually only one.
             **This attribute is required to be set**.
@@ -258,12 +259,8 @@ class LocalVariator(metaclass = ABCMeta):
              **This attribute is required to be set**.        
     
     (LocalCompoundOperator, LocalCompoundMutator and LocalGAOperator set
-    'types', 'supported_arity' and 'supported_noffspring' attributes as instance attributes)
+    '_supported_types', 'supported_arity' and '_supported_noffspring' attributes as instance attributes)
     
-    Returns
-    ---
-    list[tuple[Any, bool]]:
-        A list of evolved offspring variables, each as `(variable, success_flag)`.
     """    
     _supported_types: TypeTuple[
         Union[
@@ -286,46 +283,26 @@ class LocalVariator(metaclass = ABCMeta):
                variable_index: int,
                copy_indices: list[int | None],
                **kwargs) -> None: 
-        """`
-        Abstract evolve method. 
+        """_summary_
+        An abtract evolve method. 
         
         Alters *offspring_solutions* in-place at the *variable_index*
         
         Sets the *Solution.evaluted* flag to False if an offspring solution's variable changed
-        `
-        
-        Args
-        ----
-        **custom_type**: The CustomType or PlatypusType object the variables are derived from
-            - If it is a CustomType, may contain overriding parameters
-        
-        **parent_solutions**: Read-only Solutions objects
-        
-        **offspring_solutions** (list[object]): Deepcopied *parent_solutions*: the Solutions to update.
-        
-        **variable_index** (int | list[int]): The index the *custom_type* variable in the `Solution` objects
-            - The LocalVariator should only update `Solution.variables[variable_idx]`
-            
-        **copy_indices** (list[int | None]): A list of *parent_solution* indices (the same length as *offspring_solutions*)
-            
-            - `offspring_solution[idx]` is a copy of `parent_solutions[copy_indices[idx]]`
-            
-            - Each index is valid index of the *parents_solution* list or None. May contain duplicate indices if a parent solution was deepcopied more than once
 
-            - If an element is None, it indicates that no parent Solutions corresponds to an offspring Solution
-                (parent solution may have been removed or altered)
-        
-        **kwargs**: any additional keyword arguments passed in from a `GlobalEvolution` object
+        Args:
+            custom_type (CustomType | Type): The CustomType or Platypus Type object the variables are derived from
+            parent_solutions (list[Solution]): A list of read-only Solution objects
+            offspring_solutions (list[Solution]): Deepcopied *parent_solutions*: the Solutions to update
+            variable_index (int): The index the *custom_type* variable in the `Solution` objects
+                - The LocalVariator should only update `Solution.variables[variable_idx]`
+            copy_indices (list[int  |  None]): A list of *parent_solution* indices (the same length as *offspring_solutions*)
 
-            Extra arguments may include: 
-            
-        - other method(s) or parameters for generic types, 
-        - other *custom_type* variable indices (to calculate aggregate values),
-        - etc.
-        
+        (*kwargs* are any additional keyword arguments passed in from a `GlobalEvolution` object)
+
         Raises:
-            NotImplementedError
-        """
+            NotImplementedError:
+        """        
         raise NotImplementedError()
     
     @staticmethod
@@ -468,28 +445,20 @@ class LocalMutator(LocalVariator, metaclass = ABCMeta):
         offspring_solution: Solution, 
         variable_index: int | list[int],
         **kwargs) -> None:
-        """`
-        Abstract method that mutates one Solution in-place
-        
+        """
+        A method that mutates one Solution variable in-place.
+
         Args:
-        ---
-        **custom_type**: A Platypus or CustomType object
+            custom_type (CustomType | Type): A CustomType or Platypus Type object
+            offspring_solution (Solution): A deepcopied parent Solution
+            variable_index (int | list[int]): An index of *offspring_solution.variables*
         
-        **offspring_solution**: A deepcopied parent Solution
-        
-        **variable_index**: An index of *offspring_solution.variables*
-            
-        **kwargs**: any additional keyword arguments passed in from a `GlobalMutation` or CustomType object
-            Extra arguments may include: 
-            
-        - override probabilities, 
-        - extra parameters controlling the mutation methods of generic types,
-        - etc.
+        (kwargs may include override probabilities, extra parameters controlling mutation methods, etc.)
 
         Raises:
             NotImplementedError
-        """
-        
+        """        
+    
         raise not NotImplementedError  
     
     def __setattr__(self, name, value):
@@ -523,7 +492,7 @@ class GlobalEvolution(Variator):
         - Deepcopying parent solutions to create offspring solutions
         - Directing and defining any non-uniform mutation, if applicable
         - Determining if CustomType variable can evolve or mutate given the *do_evolution* and *do_mutation* flags.
-        - Calling LocalVariators of CustomType's and returning the offspring Solutions
+        - Calling LocalVariators of the optimization variables and returning the offspring Solutions
     
     """    
     def __init__(self, 
@@ -560,13 +529,12 @@ class GlobalEvolution(Variator):
         else:
             if copy_indices == 'all':
                 copy_indices = range(len(parents))
-            # print(f"copy_indices: {copy_indices}")
             out = [deepcopy(parents[i]) for i in copy_indices]
         
         return out
     
     def is_mutatable_type(self, problem_type: CustomType | PlatypusType) -> bool:
-        """Check if a CustomType or Platypus Type can be evolved given it's """
+        """Check if a CustomType or Platypus Type can be evolved given it's can_evolve property"""
         return (isinstance(problem_type, CustomType) and problem_type.can_evolve) or (not isinstance(problem_type, CustomType) and not self._ignore_generics)
     
     def generate_types_to_evolve(self, problem: Problem) -> Generator[tuple[CustomType | PlatypusType, int]]:
@@ -658,7 +626,7 @@ class GlobalEvolution(Variator):
 class LocalGAOperator(LocalVariator):
     """Combine a `LocalVariator` with a `LocalMutator`. 
     
-    A LocalMutator's `mutate()` is called for each output offspring the LocalVariators `evolve()` method.
+    The LocalMutator's `mutate()` is called for each output offspring the LocalVariators `evolve()` method.
     """
     
     def __init__(
@@ -770,10 +738,10 @@ class LocalSequentialOperator(LocalVariator):
 
     Requirements
     ---
-    - All variators in the sequence must share at least one CustomType (or Platypus Type) in _supported_types
+    - All variators in the sequence must share at least one CustomType (or Platypus Type) in '_supported_types'
     - All variators' minimum _supported_arity `≤` the number of parent Solutions passed to `evolve()`
     - All variators' minimum _supported_noffspring `≤` the number of offspring Solutions passed to `evolve()`
-    - LocalGAOperators, LocalCompoundOperators and LocalSequentialOperators *cannot* be part of the sequence (any equivalent nesting can be expressed with a single LocalCompoundOperator)
+    - LocalGAOperators and LocalSequentialOperators *cannot* be part of the sequence (any equivalent nesting can be expressed with a single LocalSequentialOperator)
         - LocalMutators and LocalCompoundMutators can be used in the sequence
 
     For details on class attributes and `evolve()` parameters, see `LocalVariator`
@@ -819,11 +787,10 @@ class LocalSequentialOperator(LocalVariator):
         randomize_start = False):  
         """`
         Args:
-        
             **local_variators** (list[LocalVariator]): A list of LocalVariators to compound (minimum of 2).
                 - Cannot contain LocalGAOperators or LocalCompoundOperators
                 
-            **offspring_selection** (OffspringSelection | list[OffspringSelection], optional): {'previous', 'swap', 'rand'} or a sequence thereof. Defaults to 'previous'.
+            **offspring_selection** (OffspringSelection | list[OffspringSelection], optional): A literal in `{'previous', 'swap', 'rand'}` or a sequence thereof. Defaults to 'previous'.
                 
                 Strategy for choosing which Solutions are the mutable "offspring" in each sub-operator (excluding LocalMutators)
                 - 'previous' : Prioritize the offspring mutated by the previous variator as the mutable offspring of the next variator
@@ -835,12 +802,12 @@ class LocalSequentialOperator(LocalVariator):
                 If a list is inputted, it must be of length `len(localvariators)`. The strategy at index `i` will be applied before variator `i` is called. 
                     If LocalMutators exist in the sequence, their selection strategies should also be included (see *mutation_selection*).
                     
-            **mutation_selection** (MutationSelection, optional): {'previous', 'all', 'rand'}. Defaults to 'previous'.
+            **mutation_selection** (MutationSelection, optional): A literal in `{'previous', 'all', 'rand'}`. Defaults to 'previous'.
             
                 Strategy for choosing which offspring Solutions should be mutated when a LocalVariator is a LocalMutator
                 - 'previous' : Mutate all Solutions that were passed as offspring to the previous operator
                 - 'rand'     : Mutate one random offspring Solution 
-                - 'all'      : Mutate all Solutions that were passed as offspring to the LocalCompoundOperator. 
+                - 'all'      : Mutate all Solutions that were passed as offspring to the LocalSequentialOperator. 
                 
                 If *offspring_selection* is a list, then mutation_selection* is ignored. The mutation strategies should be included in *offspring_selection*.
                     
@@ -1083,15 +1050,9 @@ class LocalSequentialOperator(LocalVariator):
                         orig_offspring_indices, original_parents, unaltered_offspring, previously_altered,
                         nparents, noffspring, swaps_left, 
                         min_arity, max_arity, min_noffspring, max_noffspring
-                    )
-                    
+                    )    
                 # print(f"new_parent_choices: {new_parent_choices}, original_parent_choices {original_parent_choices}")
                 # print(f"altered_offspring_choices: {altered_offspring_choices}, unaltered_offspring_choices {unaltered_offspring_choices}")
-                # n_altered_choices = len(altered_offspring_choices)
-                # if len(altered_offspring_choices) > 0:
-                #     assert n_altered_choices == len(np.unique(altered_offspring_choices))
-                # if len(unaltered_offspring_choices) > 0:
-                #     assert len(unaltered_offspring_choices) == len(np.unique(unaltered_offspring_choices))
                                                                                                         
                 # Create new list of parent/offspring solutions, get new copy_indices
                 new_offspring, new_copy_indices, post_replacements = tools._copy_indices_and_deepcopy(
@@ -1115,8 +1076,6 @@ class LocalSequentialOperator(LocalVariator):
                 # print(f"NUM OFFSPRING: {len(new_offspring)}")
                 # print(f"COPY_INDICES: {new_copy_indices}, (original {copy_indices})")
                 # print(f"POST_REPLACEMENTS: {post_replacements}")
-                # assert len(new_offspring) == len(new_copy_indices), f"new_copy_indices: {new_copy_indices}, post_replacements {post_replacements}"
-                # assert all(idx is None or idx < len(new_parents) for idx in new_copy_indices)
                  
                 # Pass new offspring into variator's evolve, do variable replacements + other updates
                 curr_variator.evolve(custom_type, new_parents, new_offspring, variable_index, new_copy_indices, **kwargs)

@@ -18,22 +18,16 @@ class GlobalDifferential(GlobalEvolution):
         ignore_generics = False,
         generic_step_size: float = 0.25,
         generic_crossover_rate: float = 0.25):
-        """ `
+        """ 
         Args:
-            global_crossover_probability (_type_, optional): A global "dampening" of crossover. Must be None or > 0. Defaults to None.
-
+            global_crossover_probability (float | None, optional): A global "dampening" of crossover. Must be None or > 0. Defaults to None.
                 - If None (or >= 1), then CustomType variable's will always have their 'evolve' method called (those methods usually have their own probability of evolution)
-                
                 -  To simulate global, non-uniform variation, this value could be decreased over generations with an Algorithm's *nfe* attribute
                     - This behavior would have to be implemented outside of this class 
-                
             ignore_generics (bool, optional): Whether to ignore generic Platypus Real and Integer types during crossover. Defaults to False.
-                If False, this class will evolve those generic types as well (other Platypus types are not supported at this time)
-                
-                If True, only CustomType variables will be evolved.
-            
-            generic_step_size: Controls the distribution of variation for Platypus Reals.  Defaults to 0.25.
-            
+                - If False, this class will evolve those generic types as well (other Platypus types are not supported at this time)
+                - If True, only CustomType variables will be evolved.
+            generic_step_size: Controls the distribution of evolutions for Platypus Reals. Defaults to 0.25.
             generic_crossover_rate: The crossover rate for Platypus Reals and Integers types. Defaults to 0.25
         """        
         
@@ -63,7 +57,7 @@ class GlobalDifferential(GlobalEvolution):
                 if bit_matrix is None:
                     bit_matrix = _get_2D_numpy_integer_array(parents[1:], parents[0].problem, variable_index)
                 new_bits = multi_int_crossover(bit_matrix, 1)[0]
-                offspring[0].variables[variable_index] = new_bits.to_list()
+                offspring[0].variables[variable_index] = new_bits.tolist()
                 offspring[0].evaluated = False
             elif isinstance(var_type, Real) and (crossover or np.random.uniform() < self.generic_crossover_rate):
                 new_real = float(differential_evolve(
@@ -72,7 +66,8 @@ class GlobalDifferential(GlobalEvolution):
                     parents[1].variables[variable_index],
                     parents[2].variables[variable_index],
                     parents[3].variables[variable_index],
-                    self.generic_step_size))
+                    self.generic_step_size,
+                    normalize_initial=False))
                 offspring[0].variables[variable_index] = new_real
                 offspring[0].evaluated = False
                 

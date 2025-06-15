@@ -167,7 +167,7 @@ class TestFixedMapMonotonic:
                         break
                     
                     orig_offspring_info = copy.deepcopy(offspring_sol.variables[0])
-                    distribution_bound_mutation.local_variator.sample_count_mutation_limit = lim
+                    distribution_bound_mutation.local_variator.mutation_count_limit = lim
                     distribution_bound_mutation.local_variator.mutate(distribution_bound_mutation, offspring_sol, variable_index=0)
                     new_offspring_info = offspring_sol.variables[0]
                 

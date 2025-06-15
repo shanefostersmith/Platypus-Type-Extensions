@@ -45,14 +45,7 @@ def differential_evolve(min_val, max_val, p1, p2, p3, step_size, normalize_initi
         y = p3 + step_size*(p1 - p2)
         clipped_y = max(min_val, min(y, max_val))
     return clipped_y if not normalize_initial else _min_max_norm_convert(min_val, max_val, clipped_y, False)
-
-# def differential_evolve(min_value, max_value, p1, p2, p3, step_size, normalize_initial = True):
-#     original_type = type(p1)
-#     return original_type(_real_evolve(
-#         np.float32(min_value), np.float32(max_value), 
-#         np.float32(p1), np.float32(p2), np.float32(p3), 
-#         np.float32(step_size), normalize_initial))
-    
+ 
 _vector_evolve_sig = [
     (float32[:], float32[:], float32[:], float32[:,:], float32,float32[:]),
     (float32[:], float32[:], float32[:], float32[:,:], float32, float32[:]),
@@ -63,7 +56,8 @@ _vector_evolve_sig = [
 def gu_differential_evolve(
     p1, p2, p3, 
     bounds, 
-    step_size, out):
+    step_size, 
+    out):
     """ 
     Creates a evolved array of offspring floats from 3 (same-length) arrays of parent floats
     

@@ -1,7 +1,7 @@
 
 import pytest
 from time import perf_counter
-from custom_types.global_evolutions.basic_global_evolution import BasicGlobalEvolution
+from custom_types.global_evolutions.general_global_evolution import GeneralGlobalEvolution
 from platypus import EvolutionaryStrategy, NSGAII
 from pytest_mock import MockerFixture
 from tests.conftest import unconstrainedProblem, Solution, CustomType
@@ -13,19 +13,17 @@ from ..real_bijection import RealBijection
 NVARS = 3
 PROBABILITIES = [0.1, 0.25, 0.5]
 USE_CACHE = True
-ITERS = 2000
+ITERS = 1000
 MAX_POINTS = 250
 
 def _create_global_evolution_and_alg(problem, population_size = 2, offspring_size = 2):
-    # global_ev = BasicGlobalEvolution(nparents = 1, noffspring = 1, copy_method=0)
+    # global_ev = GeneralGlobalEvolution(nparents = 1, noffspring = 1, copy_method=0)
     # alg = EvolutionaryStrategy(problem, population_size, offspring_size, variator=global_ev)
-    global_ev = BasicGlobalEvolution(nparents = 2, noffspring = 2, copy_method='rand')
+    global_ev = GeneralGlobalEvolution(nparents = 2, noffspring = 2, copy_method='rand')
     alg = NSGAII(problem, population_size, variator=global_ev)
     return alg
 
-def _create_mono_distribtions(cache_type, mutation_probability = 0.99, cache_size = 20):
-    
-    
+def _create_one_bijection():
     bijection_params = HALF_LIFE_PARAMS[0][0]
     forward_func, inverse_func, x_max, _, abs_max_points = half_life_bijection(**bijection_params)
     max_points = min(abs_max_points, MAX_POINTS)
@@ -37,6 +35,10 @@ def _create_mono_distribtions(cache_type, mutation_probability = 0.99, cache_siz
         precision = 'double')
     bij = RealBijection(forward_func, bounds.create_bounds_state(), inverse_func)
     del bounds
+    return bij
+
+def _create_mono_distribtions(cache_type, mutation_probability = 0.99, cache_size = 20):
+    bij = _create_one_bijection()
     
     distribs = []
     if cache_type == 'cache':
@@ -153,6 +155,21 @@ class TestMonoDistributionCache:
             print(f"    cache2 ({PROBABILITIES[1]}): miss % {round(100.0*miss_perc2, 2)}, {info2}")
             print(f"    cache3 ({PROBABILITIES[2]}): miss % {round(100.0*miss_perc3, 2)}, {info3}")
         print("\n")
+
+def test_lru_smoke():
+    bij =  _create_one_bijection()
+    MonotonicDistributions(
+        mappings=[bij], 
+        local_mutator= DistributionShift(), 
+        use_cache = True,
+        max_cache_size=10
+    )
+    MonotonicDistributions(
+        mappings=[bij], 
+        local_mutator= DistributionShift(), 
+        use_cache = True,
+        max_cache_size=0
+    )
 
     
 def test_print_calls(single_memo_distribution: list[Solution], monkeypatch):

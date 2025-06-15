@@ -36,118 +36,67 @@ class PointBounds(BoundsViewMixin):
     Automatic Bound Determination and Conflict Resolution
     ----
     When defining most or all of the bounds, conflicts may emerge. 
-        Checking for these conflicts during every evolution and/or mutation is far less efficient than dealing with them beforehand.
+    Checking for these conflicts during every evolution and/or mutation is far less efficient than dealing with them beforehand.
     
     **To ensure consistent behavior across the classes and methods that use these bounds, this class will automatically resolve any conflicts.
     Bounds may also be set automatically if other attributes are avaliable.
         For example:**
     
         - Say the lower bound is `x0`, the upper bound is `xn`, and no fixed width has been set.
-        
         - The upper bound of the first point is set to `xi` and the lower bound of the last point is set to `xj`
-        
         - This gives you first point bounds `(x0, xi)` and last point bounds `(xj, xn)`. 
-            Assuming `xi` < `xj` (note, this is not required in practice), then a minimum and maximum width for any set of points is implicity defined as:
-            
+        Assuming `xi` < `xj` (note, this is not required in practice), then a minimum and maximum width for any set of points is implicity defined as:
             - `min_width = xj - xi`
-            
             - `max_width =  xn - x0`
-        
         - If a minimum number of points has been set, then the absolute maximum distance between two adjacent points is:
-
             - `max_separation = max_width / (min_points - 1)`
-        
         - If a maximum number of points has been set, then the absolute minimum distance between two adjacent points is:
-
             - `min_separation = min_width / (max_points - 1)`
-        
         - If the attributes for the minimum and maximum distance between adjacent points have not been set, or they fall outside these limits, they will be set/reset automatically.
-    
-    **Important Note on Loosening Bounds**:
-    
-        - If a bound is set, and other bounds could be relaxed as result, this class will **not** make changes to those other bounds. 
-        
-            - i.e. **Automatic changes only occur when resolving conflicts caused by setting tighter bounds, or to set new bounds that have been implicitly determined**.
-            
-        - For example, a "fixed width" bound will automatically set first point and last point bounds. 
-        If that fixed_width bound is removed at a later time, the first point and last point bounds will remain.
-            
-        - Automatic changes after loosening bounds are avoided so that you may define bounds inside the absolute limits 
-            (otherwise, many bounds would always be set to their theoretical maximum/minimum values)
         
     **Fixed Width Example**
-
         - The lower bound is set to `x0` and the upper bound is set to `xn`.
             Assuming `fixed_width` <= `xn - x0`, the upper bound of the first point `xi` and the lower bound of the last point `xj` are set to:
-            
             - `xi = xn - fixed_width` 
-                
             - `xj = x0 + fixed_width`
-        
         - A fixed width implies that the first point bounds `(x0, xi)` and last point bounds `(xj, xn)` span the same distance.
-        
         - A set of points can then "slide" within the first bound points / the last point bounds, but the width of those sets of points never changes.
-            
             - If `x0 == xi` (implying `xj == xn`), then the first point will *always* be the lower bound, and the last point will *always* be the upper bound
-    
-    This class may also make small adjustments to inputs in relation to the inclusivity / exclusivity of bound values. 
-        These adjustments also follow the general hierarchy of conflict resolutions
     
     See the *Hierarchy* below for a reference on the "order of operations" for conflict resolutions and automatic setting of bounds.
     
     The Hierarchy:
     ---
     - **The lower bound and the upper bound (the full bounds)**
-
         - These bounds will never change automatically
-    
         - If changed by the user, all other existing bounds will be checked and potentially changed to ensure compatibility.
-       
     - **A fixed distance between the first and last point** 
-    
         - This value is never set automatically.
-
-        - Once set, this value will only change if the span of the full bounds becomes smaller than this width. 
-                
+        - Once set, this value will only change if the span of the full bounds becomes smaller than this width         
     - **The upper bound of the first point and the lower bound of the last point**
-    
         - Are set automatically with the setting of a fixed width. If a fixed width is set, these bounds cannot be set until the fixed width reset to None.
-            
         - These bounds will change if they become invalid due to setting full bound values, or due to setting a fixed width
- 
+        - If these bounds are not manually set, then they will be set automatically given the separation and cardinality bounds
     - **Bounds on number of points (cardinality) and bounds on distance between adjacent points (separation)**
-            
-        - Generally, cardinality bounds have a higher priority than separation bounds. Separation bounds will be adjusted first if conflicts emerge when setting higher priority bounds.
-        
-        - If separation bounds are set directly, then the cardinality bounds may be adjusted if conflicts emerge. Setting a minimum separation allows the 'max_points' bound to be set, if not already.
-        
-        - *Adjustments only ensure that **at least one** combination of point number and adjacent distance fall within the current width bounds*:
-    
+        - Generally, setting cardinality bounds changes the separation bounds, and setting separation bounds changes the cardinality bounds (if applicable)
+        - If the minimum and maximum separation bounds have not been set manually, then they will always be set to the minimum / maximum theoretical value.
+        - *Adjustments only ensure that **at least one** combination of cardinality and separation values fall within the current width bounds*:
             - If width bounds are known, then it is required that:
-            
                 -  `min_separation` * `(max_points - 1)` >= `min_width` 
-                
                 -  `max_separation` * `(min_points - 1)` <= `max_width`
-                
                 -  `min_separation` <= `max_separation` and `min_points` <= `max_points`
-
-                -  (Automatic adjustments are made to adjacent distance bounds and/or point number bounds so that these conditions are met)
-                
+                -  (Automatic adjustments are made to separation bounds and/or cardinality bounds so that these conditions are met)
             - **However, it is not required that**:
-            
                 - `min_separation` * `(min_points - 1)` >= `min_width`
-                
-                - `max_separation` * `(max_oints - 1)` <= `max_width` 
-                
-                    
+                - `max_separation` * `(max_points - 1)` <= `max_width` 
+                              
     Note on Precision
     ---
-    - To be compatible with Numba components of this library, only numpy.float32 and numpy.64 types are supported
-    - The absolute minimum separation between two numbers is given max of: 
-        -  `np.spacing(x, dtype = dtype)` where `x` = `max(abs(lower_bound), abs(upper_bound), 1.0)`
+    - To be compatible with Numba components of this library, only numpy float32 and float64 types are supported
+    - The absolute minimum separation between two numbers is given by: 
+        -  `np.spacing(x, dtype = dtype)` where `x = max(abs(lower_bound), abs(upper_bound))`
         - This is to ensure all numbers between the lower and upper bound are representable with an even-spacing
     """
-    pass
 
     def __init__(
         self,
@@ -165,14 +114,13 @@ class PointBounds(BoundsViewMixin):
             upper_bound (float): The maximum value of the last point
             inclusive_lower (bool, optional): Defaults to True.
             inclusive_upper (bool, optional): Defaults to True.
-            minimum_points (int, optional):. Defaults to 2.
-            maximum_points (int | None, optional): If None, an np.inf value is set. Defaults to None.
+            minimum_points (int, optional): Defaults to 2.
+            maximum_points (int | None, optional): If None, an `np.inf` value is set. Defaults to None.
             precision (Literal[&#39;single&#39;, &#39;double&#39;], optional): The floating point precision type (float32 or float64). Defaults to 'single'.
 
         Raises:
-            TypeError: _description_
-            TypeError: _description_
-            TypeError: _description_
+            TypeError: If the input minimum points < 2
+            TypeError: If the input maximum points < minimum points
         """              
         self.model = pyo.ConcreteModel()
         

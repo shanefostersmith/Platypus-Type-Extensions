@@ -129,7 +129,6 @@ def combined_set_mutation(subset_size: int, num_bins: int, num_inactives: int, d
     Assumes:
             total_features > subset size > 1, mutate_permutation_probability > 0"""
 
-    # print("here combined")
     total_features = len(directory)
     last_idx = np.random.randint(total_features)
     last_bin = num_bins - 1
@@ -154,7 +153,6 @@ def combined_set_mutation(subset_size: int, num_bins: int, num_inactives: int, d
     
     inactive_swap_probability = np.float32(1.0 / total_features)
     for i in range(total_features):
-        # print(f"last: {directory[last_idx]} last_active? {last_active}, ")
         if i == last_idx:
             continue
         curr_elem = directory[i]
@@ -187,7 +185,6 @@ def active_set_mutation(subset_size: int, num_bins: int, directory: np.ndarray, 
     """Assumes len(directory) > 1, num_bins > 1, mutate_permutation_probability > 0,
     
     Return bool indicating if a mutation occured"""
-    # print("here active")
     total_features = directory.shape[0]
     last_bin = num_bins - 1
     
@@ -213,7 +210,6 @@ def active_set_mutation(subset_size: int, num_bins: int, directory: np.ndarray, 
         seen_actives += 1
         i += 1
     
-    # print(f"did mutation: {did_mutation}")
     return did_mutation
 
 @njit

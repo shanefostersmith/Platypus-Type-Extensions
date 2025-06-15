@@ -4,7 +4,7 @@ import copy
 from typing import Literal
 from platypus import Problem, Solution
 from custom_types.core import CustomType, LocalVariator, LocalMutator
-from custom_types.global_evolutions.basic_global_evolution import BasicGlobalEvolution
+from custom_types.global_evolutions.general_global_evolution import GeneralGlobalEvolution
 
 @pytest.fixture(
     params=[1, 2, 5],
@@ -197,7 +197,7 @@ def create_multi_var_solutions(
     if problem is None:
         problem = unconstrainedProblem(*custom_types)
     else:
-        custom_types = [problem.types[i] for i in problem.nvars]
+        custom_types = [problem.types[i] for i in range(problem.nvars)]
     
     out = []
     for _ in range(nsolutions):
@@ -206,10 +206,11 @@ def create_multi_var_solutions(
         for custom_type in custom_types:
             for j in range(problem.nvars):
                 solution.variables[j] = custom_type.rand()
-            if issubclass(type(custom_type.local_variator), LocalMutator):
-                custom_type.do_mutation = True
-            else:
-                custom_type.do_evolution = True
+            if isinstance(custom_type, LocalVariator):
+                if issubclass(type(custom_type.local_variator), LocalMutator):
+                    custom_type.do_mutation = True
+                else:
+                    custom_type.do_evolution = True
         out.append(solution)
         
     return out
@@ -218,5 +219,5 @@ def create_basic_global_evolution(
     arity, offspring, 
     copy_method: int | Literal['sample', 'rand'] = 'rand'):
     
-    return BasicGlobalEvolution(arity, offspring, copy_method)
+    return GeneralGlobalEvolution(arity, offspring, copy_method)
     

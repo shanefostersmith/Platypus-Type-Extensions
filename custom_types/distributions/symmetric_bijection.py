@@ -11,11 +11,11 @@ from .real_bijection import RealBijection
 
 class SymmetricBijection(RealBijection):
     """ `
-    A class for evolving and mutating **symmetric** arrays of real values.
-    These values are mapped from distributions or functions that are monotonic increasing/decreasing on both "sides" of a global minima or maxima. 
+    **A class for creating symmetric bijections between two real valued domains**.
     
-    Functions that fit this description include unimodal distributions and functions with *convexity*:
-        
+    Ouput alues are mapped from functions that are monotonic increasing/decreasing on both "sides" of a global minima or maxima. 
+    
+    Functions that fit this description include unimodal distributions and functions with *convexity*.
     For example, a normal/Gaussian distribution is *unimodal distriution* and `y = x^2` is a *concave* upward function.
     
     You may also provide any strictly monotonic function and this class will create a symmetric function around the "center" x.
@@ -43,7 +43,7 @@ class SymmetricBijection(RealBijection):
 
     This is a subclass of `RealBijection` and uses most of the same logic and methods.
     
-    Note that, **only static PointBounds are currently supported**)
+    Note that, **only static PointBounds are currently supported** (no setting of bounds after initialization)
     """    
     
     def __init__(self,
@@ -64,67 +64,36 @@ class SymmetricBijection(RealBijection):
         unique_id: Hashable | None = None):
         """ 
         Args:
-        
-        forward_function (partial | callable): The function from x values to y values 
-        
-            - Only required to be valid *for one side* of the global minima or maxima
-        
-            - (See *RealBijection* for more details)
-        
-        center_x (Number: The x value that maps to the global minima / maxima
-        
-        right_side_provided (bool): 
-        
-            - If True, indicates that the forward / inverse functions are for x values >= center x 
-            
-            - If False, indicates that the forward / inverse functions are for x values <= center x 
-        
-        min_width (Number): The minimum distance between first and last **x** value 
-
-            - i.e. the minimum distance from the center x **times 2**
-        
-        max_width (Number): The maximum distance between first and last **x** value 
-
-            - i.e. the maximum distance from the center x **times 2**
-        
-        min_points (int, optional): the minimum number of points in any output distribution
-        
-        max_points (int, optional): the maximum number of points in any output distribution
-        
-        forward_args (dict, optional): Keyword arguments for the forward map function
-        
-        inverse_map (partial | callable | None): The inverse function of the forward map
-            
-            - The function from y values to x values *for one side* of the global minima or maxima
-        
-            - See (*RealBijection* for more details on inverse functions)
-        
-        inverse_args (dict | None): Keyword arguments for the inverse map function
-        
-
-        include_global_extrema (bool, optional): Indicates if the global minima or maxima should **always** be included in the output arrays. Defaults to False.
-        
-            - If True, this implies all output arrays will be odd-sized
-        
-        exclude_global_extrema (bool, optional): Indicates if the global minima or maxima should **always** be excluded in the output arrays. Defaults to False.
-
-            - If True, this implies all output arrays will be even-sized
-            
-            - If *include_global_extrema* is False and *exclude_global_extrema* is False, 
-                then the global minima/maxima may or may not be included in output arrays 
-        
-        point_bounds (PointBounds, optional): Defaults to None
-        
-            - If None, a PointBounds object will be created. If provided, the min_width/max_width and min_points/max_points are still required to be inputed.
-        
-            - Used to prevent multiple PointBounds objects from being created when using the same bounds across multiple symmetric bijections
-        
-            - **Should be created with the 'create_bounds_for_symmetry()'* function**
-
-        precision (type, optional): The numeric type of the output numpy arrays, 'single' (float32) or 'double' (float64). Defaults to 'double`.
-        
-        unique_id (Hashable | None, optional): (See *RealBijection*)). Defaults to None.
-        
+            forward_function (partial | callable): The function from x values to y values 
+                - Only required to be valid *for one side* of the global minima or maxima
+                - (See *RealBijection* for more details)
+            center_x (float): The x value that maps to the global minima / maxima
+            right_side_provided (bool): 
+                - If True, indicates that the forward / inverse functions are for x values >= center x 
+                - If False, indicates that the forward / inverse functions are for x values <= center x 
+            min_width (float): The minimum distance between first and last **x** value 
+                - i.e. the minimum distance from the center x **times 2**
+            max_width (float): The maximum distance between first and last **x** value 
+                - i.e. the maximum distance from the center x **times 2**
+            min_points (int, optional): the minimum number of points in any output distribution
+            max_points (int, optional): the maximum number of points in any output distribution
+            forward_args (dict, optional): Keyword arguments for the forward map function
+            inverse_map (partial | callable | None): The inverse function of the forward map
+                - The function from y values to x values *for one side* of the global minima or maxima
+                - See (*RealBijection* for more details on inverse functions)
+            inverse_args (dict | None): Keyword arguments for the inverse map function
+            include_global_extrema (bool, optional): Indicates if the global minima or maxima should **always** be included in the output arrays. Defaults to False.
+                - If True, this implies all output arrays will be odd-sized
+            exclude_global_extrema (bool, optional): Indicates if the global minima or maxima should **always** be excluded in the output arrays. Defaults to False.
+                - If True, this implies all output arrays will be even-sized
+                - If *include_global_extrema* is False and *exclude_global_extrema* is False, 
+                    then the global minima/maxima may or may not be included in output arrays 
+            point_bounds (PointBounds | BoundsState | None, optional): Defaults to None
+                - If None, a PointBounds object will be created. If provided, the min_width/max_width and min_points/max_points are still required to be inputed.
+                - Used to prevent multiple PointBounds objects from being created when using the same bounds across multiple symmetric bijections
+                - **Should be created with the `create_bounds_for_symmetry()` function**
+            precision (type, optional): The numeric type of the output numpy arrays, 'single' (float32) or 'double' (float64). Defaults to 'double`.
+            unique_id (Hashable | None, optional): (See *RealBijection*)). Defaults to None.
         """        
         
         all_bounds = point_bounds
@@ -136,7 +105,8 @@ class SymmetricBijection(RealBijection):
               include_global_extrema, 
               exclude_global_extrema,
               right_side_provided, 
-              precision)
+              precision,
+              create_bounds_state=True)
         else:
             all_bounds = point_bounds
 
@@ -168,7 +138,6 @@ class SymmetricBijection(RealBijection):
         output_points, 
         output_separation):
         
-        # print("INCLUSIVE")
         full_max_points = self._full_point_bounds[1]
         full_min_sep = self._full_separation_bounds[0]
         double_output_points = (
@@ -197,7 +166,6 @@ class SymmetricBijection(RealBijection):
         output_separation, 
     ):
         
-        # print("EXCLUSIVE")
         full_max_points = self._full_point_bounds[1]
         full_min_sep = self._full_separation_bounds[0]
         double_output_points = 2*output_points
@@ -226,11 +194,12 @@ class SymmetricBijection(RealBijection):
         output_points, 
         output_separation, 
     ):
-        print("CHOICE")
+        
         full_min_points, full_max_points = self._full_point_bounds
         full_min_separation, full_max_separation = self._full_separation_bounds
         assert full_min_points < full_max_points
         
+        # choose whether to include center or not
         double_output_points = 2*output_points
         include_center = 0
         min_room = full_min_separation - self.point_bounds.min_separation 
@@ -270,17 +239,11 @@ class SymmetricBijection(RealBijection):
                 output_separation = prev_full_width / self.point_bounds.dtype(double_output_points - 1)
 
         curr_full_width = output_separation * self.point_bounds.dtype(double_output_points - 1)
-        # print(f"BEFORE: points {double_output_points}, separation {output_separation}, width {curr_full_width}")
-        # print(f"    full_min_sep {full_min_separation}, half_min_sep {self.point_bounds.min_separation}")
-        # print(f"    full_max_sep {full_max_separation}, half_max_sep {self.point_bounds.max_separation}")
-        # print(f"    full_min/max width {self._full_width_bounds}")
-        # print(f"    full_min/max points {self._full_point_bounds}")
         double_output_points, output_separation = sym_bound_adjustment(
             double_output_points, output_separation, curr_full_width,
             self._full_point_bounds, self._full_separation_bounds, self._full_width_bounds,
             self.point_bounds.dtype, even_points = not bool(include_center)
         )
-        # print(f"AFTER: points {double_output_points}, separation {output_separation}, width {output_separation * (double_output_points - 1.0)}\n")
         output_points = double_output_points // 2 + include_center
         if not self.right_side_provided:
             output_separation = -output_separation
@@ -320,7 +283,6 @@ class SymmetricBijection(RealBijection):
             output_start, output_points, output_separation, include_center = self._choice_adjustment(
                 output_start, output_points, output_separation, 
             )
-            print(f'inner include_center {include_center}')
         return output_start, output_points, output_separation, include_center
 
     def create_distribution(self, start_x, num_points, separation, **kwargs):
@@ -354,13 +316,11 @@ def _fixed_mod_points(
         else:
             include_global_extrema = True
     elif min_points == max_points:
-        
         if include_global_extrema:
             min_points += 1
             max_points += 1
         else:
             exclude_global_extrema = True  
-        # print(f'here even: inc {include_global_extrema}, ex {exclude_global_extrema}, points {min_points, max_points}')
     elif (exclude_global_extrema or include_global_extrema):
         if min_points + 1 == max_points:
             max_points += 1
@@ -459,10 +419,8 @@ def create_bounds_for_symmetry(
         
         point_bounds.set_max_separation(true_max_separation)
         if point_bounds.min_separation > true_min_separation:
-            # print("HERE")
             point_bounds.set_max_points(half_max_points + 1)
         else:
             point_bounds.set_max_points(half_max_points)
         
-    
     return point_bounds if not create_bounds_state else point_bounds.create_bounds_state()

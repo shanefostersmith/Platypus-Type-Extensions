@@ -51,8 +51,7 @@ def sym_bound_adjustment(
 ):
     """Adjusts bounds for symmetric distributions. 
     Specify whether even or odd points are returned (whether or not center is included)
-    
-    (even points == 0 if True, 1 if )
+
     Returns:
         tuple: (new_full_width, new_double_points, new_separation)
 

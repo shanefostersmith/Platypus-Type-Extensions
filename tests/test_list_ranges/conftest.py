@@ -63,6 +63,7 @@ def step_value_type(single_variation_type, step_bounds):
         return SteppedRange(lb, ub, step, local_mutator=variator)
     
 def createMultiRealRanges():
+    seed = np.random.seed(1234)
     col1 = np.random.uniform(-1.0, 0.25, size = 4)
     col2 = np.random.uniform(0.5, 1.25, size = 4)
     return np.column_stack((col1, col2))
@@ -76,7 +77,7 @@ def createMultiIntRanges():
     
 @pytest.fixture
 def multi_real_with_crossover(real_variator):
-    variator = MultiDifferentialEvolution(0.99, 0.99) if real_variator == 'de' else MultiPCX(0.99)
+    variator = MultiDifferentialEvolution(0.99, 0.99) if real_variator == 'de' else MultiPCX(0.99, 0.9, 0.9)
     return MultiRealRange(createMultiRealRanges(), local_variator=variator)
 
 @pytest.fixture

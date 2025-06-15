@@ -104,6 +104,8 @@ def symmetric_distribution(symmetric_linear_func, npoints, inclusive_center, fix
         include_global_extrema=include_extrema,
         exclude_global_extrema=exclude_extrema)
     
+    assert sym_bijection._x_point_bounds.max_points < max_points*2
+    
     set_y_min, set_y_max = sym_bijection.y_bounds
     if right_provided:
         assert not sym_bijection.direction if upward_bijection else sym_bijection.direction

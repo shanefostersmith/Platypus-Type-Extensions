@@ -2,17 +2,14 @@ import numpy as np
 from  ._tools import *
 from ..core import CustomType, LocalVariator, LocalMutator
 from ..utils import _nbits_encode, int_to_gray_encoding, gray_encoding_to_int
-from ..integer_methods.integer_methods import multi_int_crossover, int_mutation
-from ..real_methods.numba_differential import real_mutation, differential_evolve
+from ..integer_methods.integer_methods import multi_int_crossover
+from ..real_methods.numba_differential import real_mutation
 from ..real_methods.numba_spx import _single_spx
-from ..real_methods.numba_pcx import normalized_2d_pcx, normalized_1d_pcx
-from platypus import Solution
-from collections.abc import Sequence
-from numba import njit
+from ..real_methods.numba_pcx import normalized_2d_pcx
 
 class SetPartition(CustomType):
     """ `
-    Evolve/mutate a subset of elements partitioned into bins
+    **Evolve/mutate a subset of elements partitioned into bins**
 
     Say you have `n` total features, a subset size of `x` and `y` number of bins (where `n` >= `x` and `n` >= `y`)
     
@@ -26,7 +23,6 @@ class SetPartition(CustomType):
         
         - directory[`i`] == `-1` indicates that feature `i` is *inactive* 
             (not placed in any of the `y` bins)
-        
     `
     """   
     # Future work: if subset << total features, map active bins map to list features, dynamically update/remove keys 
@@ -40,7 +36,7 @@ class SetPartition(CustomType):
         local_variator = None,
         local_mutator = None
     ):
-        """ `
+        """ 
         Args:
             **total_features** (int): How many total features to choose from. Must be an integer >= 2
             
@@ -53,30 +49,33 @@ class SetPartition(CustomType):
                 Otherwise, bins must be an integer where  2 <= bins <= total_features
                 
             **equal_start**: Start with filling bins equally. Defaults to False.
-            
                 - If False, fully random `rand()` method.
-                
                 - If True, `rand()` function assigns features is bins as evenly as possible.
-                    If bins == subset size, every bin has one feature. 
-                    If bins > subset size, all features are in different bins, but not all bins have a feature.
-                    If bins < subset size, bins with the least number of features will be filled first
+                    -       If bins == subset size, every bin has one feature. 
+                    -       If bins > subset size, all features are in different bins, but not all bins have a feature.
+                    -       If bins < subset size, bins with the least number of features will be filled first
                     
         """        
         
         self.total_features= int(total_features)
-        assert self.total_features >= 2, "total_features must be greater than or equal to 2"
+        if self.total_features < 2:
+            raise ValueError(f"total_features must be greater than or equal to 2, got {self.total_features}")
+        
         self.subset_size = None
         if subset_size is None:
             self.subset_size = self.total_features
         else:
             self.subset_size = int(subset_size)
-            assert 2 <= self.subset_size <= total_features, "subset_size must be in the range [2, total_features]"
+            if not (2 <= self.subset_size <= total_features):
+                raise ValueError(f"The subset_size must be in the range [2, total_features], got {self.subset_size}")
+    
         self.num_bins = None
         if bins is None:
             self.num_bins = self.subset_size
         else:
             self.num_bins = int(bins)
-            assert 2 <= self.num_bins <= total_features, "bins must be in the range [2, total_features]"
+            if not (2 <= self.subset_size <= total_features):
+                raise ValueError(f"The number of bins must be in the range [2, total_features], got {self.num_bins}")
 
         self.equal_start = equal_start
         super().__init__(local_variator=local_variator, local_mutator=local_mutator)
@@ -136,25 +135,25 @@ class BinMutation(LocalMutator):
     Swap active and inactive features of a directory and/or apply bit-flip mutation to the active feature bins.
     Depending on the probability gates, one, both, or neither of the mutations may occur"""
     _supported_types = SetPartition
-    __slots__ = ("bin_mutation_prob", "bin_swap_rate")
+    __slots__ = ("bin_mutation_probability", "bin_swap_rate")
 
-    def __init__(self, bin_mutation_prob = 1.0,  bin_swap_rate = 0.1):
+    def __init__(self, bin_mutation_probability = 1.0,  bin_swap_rate = 0.1):
         """
         Args:
-            bin_mutation_prob (float, optional): Probability of mutating an active feature's bin with a bit-flip. Defaults to 1.0.
-                Probability gate is applied to active features individually. \n
-                If probability >= 1, will default to `1 / num_active_features`
+            bin_mutation_probability (float, optional): Probability of mutating an active feature's bin with a bit-flip. Defaults to 1.0.
+                - Probability gate is applied to active features individually. \n
+                - If probability >= 1, will default to `1 / num_active_features`
                 
             bin_swap_rate (float, optional): The probability swapping an 'inactive' feature with an 'active' feature. Defaults to 0.1.
-                When the probability threshold is met, guarantees 1 swap will occur (with small probability other swaps will occur)\n
-                If a SetPartition's fixed subset-size is equal to the total number of features, then no swaps can occur.
+                - When the probability threshold is met, guarantees 1 swap will occur (with small probability other swaps will occur)\n
+                - If a SetPartition's subset size is equal to the total number of features, then no swaps can occur.
         """     
-        self.bin_mutation_prob = bin_mutation_prob
+        self.bin_mutation_probability = bin_mutation_probability
         self.bin_swap_rate = bin_swap_rate
     
     def mutate(self, custom_type: SetPartition, offspring_solution, variable_index, **kwargs):
         num_inactives = custom_type.total_features - custom_type.subset_size
-        bit_flip_prob = self.bin_mutation_prob
+        bit_flip_prob = self.bin_mutation_probability
         if bit_flip_prob >= 1:
             bit_flip_prob == 1.0 / custom_type.subset_size
         swap_rate = 0 if not num_inactives else self.bin_swap_rate
@@ -179,8 +178,8 @@ class FixedSubsetSwap(LocalVariator):
     
     Swaps 'active' features with 'inactive' features. Decision is informed by which features are active or inactive in parent Solutions
     
-    If the fixed subset size of the SetPartition is the same as the total number of features, then no swap can occur.
-         (see SetPartition)"""
+    If the subset size of the SetPartition is the same as the total number of features, then no swap can occur.
+    """
     
     _supported_types = SetPartition
     _supported_arity = (2,None)
@@ -190,7 +189,7 @@ class FixedSubsetSwap(LocalVariator):
     def __init__(self, partition_swap_rate = 0.2):
         """
         Args:
-            partition_swap_prob (float, optional): The probability an offspring solution will swap at least 1 active and inactive feature. Defaults to 0.2.
+            partition_swap_rate (float, optional): The probability an offspring solution will swap at least 1 active and inactive feature. Defaults to 0.2.
                 The probability gate is applied to the offspring solutions individually
         """        
         self.partition_swap_rate = partition_swap_rate
@@ -229,9 +228,8 @@ class FixedSubsetSwap(LocalVariator):
 class ActiveBinSwap(LocalVariator):
     """A LocalVariator for a SetPartition
     
-    Evolve the bins that 'active' features are assigned to. Inactive features are ignored (see FixedSubsetSwap)
-    
-    Treats bins as non-ordinal and does not change bin values"""
+    Crossover the bins that 'active' features are assigned to (does nto change bin values). Inactive features are ignored
+    """
     
     _supported_types = SetPartition
     _supported_arity = (2,None)
@@ -241,7 +239,6 @@ class ActiveBinSwap(LocalVariator):
     def __init__(self, active_swap_rate = 0.2):
         """
         Args:
-        
             active_swap_rate (float, optional): The probability the bin of an active feature will be evolved. Defaults to 0.2.
                 The probability gate is applied to features individually. 
         """        
@@ -298,47 +295,50 @@ class WeightedSet(CustomType):
                  max_weight: float = 0.99, 
                  local_variator = None,
                  local_mutator = None):
-        """`
+        """
         Args:
             **total_features** (int): An integer >= 2
-            
-            **min_subset_size** (int): An integer in inclusive range [2, total_features]
-            
-            **max_subset_size** (int | None, optional): An integer in inclusive range [min_subset_size, total_features]. Defaults to None
-                If None, the max_subset_size will default to total_features
-                
+            **min_subset_size** (int): An integer in inclusive range `[2, total_features]`
+            **max_subset_size** (int | None, optional): An integer in inclusive range `[min_subset_size, total_features]`. Defaults to None
+                - If None, the max_subset_size will default to total_features
             **min_weight** (float, optional): The minimum weight allowed for any one feature. Defaults to 0.001.
-                - Must be a float in the exclusive range (0.0, 1 / *max_subset_size*). Will be adjusted if >= 1 / *max_subset_size*)
-                
+                - Must be a float in the exclusive range `(0.0, 1 / max_subset_size)`. Will be adjusted if >= 1 / *max_subset_size*)
             **max_weight** (float, optional): The maximum weight allowed for any one feature. Defaults to 0.99.
-                - Must be greater than min_weight and in the exclusive range (1 / min_subset_size, 1.0). Will be adjusted if <= 1 / min_subset_size
-
-            **mutate_subset_probability** (float, optional): The probability that a feature will be randomly removed or added to a subset. Defaults to 0.1.
-                Automatically set to 0 if min_subset_size = max_subset_size
-                
-            **mutate_weights_probability** (float, optional): The probability that weights will be mutated (at least 2 weights). Defaults to 0.1.
-            
-            **evolve_subset_probability** (float, optional): The probabilty crossing over active features of parent directories. May also change size of offspring subsets. Defaults to 0.2.
-                - Probability is applied to all offspring - all offspring do feature crossover or none do
-                
-            **evolve_weight_probability**: The probability of crossing over the active features' weights of parent directories
-                - Probabiliity is applied to the offspring individually
-            
+                - Must be greater than min_weight and in the exclusive range `(1 / min_subset_size, 1.0)`. Will be adjusted if <= 1 / min_subset_size
+            **local_variator** (LocalVariator, optional): Cannot be a LocalMutator, should have WeightedSet registered in _supported_types. Defaults to None.
+            **local_mutator** (LocalMutator, optional): A LocalMutator, should have WeightedSet registered in _supported_types. Defaults to None.
+        
+        Raises:
+            ValueError: If total_features < 2
+            ValueError: If not 2 <= min_subset_size <= total_features
+            ValueError: If not min_subset_size <= max_subset_size <= total_features
+            ValueError: if not 0 < min_weight < 1:
+            ValueError: If not min_weight < max_weight < 1:
         """        
         
         # Set subset size bounds
-        self.total_features= np.int32(total_features)
-        assert self.total_features >= 2, f"total_features must be greater than or equal to 2, got {self.total_features}"
+        self.total_features = np.int32(total_features)
+        if self.total_features < 2:
+            raise ValueError(f"total_features must be greater than or equal to 2, got {self.total_features}")
+        
         self.min_features = np.int32(min_subset_size)
-        assert 2 <= self.min_features <= self.total_features, f"The minimum subset size must be greater than 2 and less than the total features ({self.total_features}), got {self.min_features}"
-        if max_subset_size is None:
-            self.max_features = self.total_features
-        else:
+        if not (2 <= self.min_features <= self.total_features):
+            raise ValueError(
+                f"The minimum subset size must be greater than 2 and less than the total "
+                f"features ({self.total_features}), got {self.min_features}"
+        )
+        self.max_features = self.total_features
+        if max_subset_size is not  None:
             self.max_features = np.int32(max_subset_size)
-            assert self.min_features <= self.max_features <= self.total_features, f"The max subset size must be >= the min subset size ({self.min_features}) and <= the total number of features ({self.total_features}), got {self.max_features}"
+            if not (self.min_features <= self.max_features <= self.total_features):
+                raise ValueError(
+                    f"The max subset size must be >= the min subset size ({self.min_features}) "
+                    f"and <= the total number of features ({self.total_features}), got {self.max_features}"
+                )
         
         # Set weight bounds
-        assert 0 < min_weight < 1, f"The min weight must be greater than 0 and less than 1, got {min_weight}"
+        if not (0 < min_weight < 1):
+            raise ValueError(f"The min weight must be greater than 0 and less than 1, got {min_weight}")
         self.min_weight = None
         self.max_weight = None
         if min_weight >= 1.0 / self.max_features:
@@ -346,14 +346,17 @@ class WeightedSet(CustomType):
         else:
             self.min_weight = np.float32(min_weight)
             
-        assert self.min_weight < max_weight < 1, f"The max weight must be greater than the min_weight ({self.min_weight}) and less than 1, got {max_weight}"
+        if not (self.min_weight < max_weight < 1):
+            raise ValueError(
+                f"The max weight must be greater than the min_weight ({self.min_weight}) "
+                f"and less than 1, got {max_weight}"
+            )
         m_upper = 1.0 / self.min_features
         if max_weight <= m_upper:
             self.max_weight = np.float32(max(1.05 / self.min_features, min(1.0 - self.min_weight*self.min_features, max_weight + 1.05*(m_upper - max_weight))))
         else:
             self.max_weight = np.float32(max_weight)
 
-        # print(f"min_weight: {self.min_weight}, max_weight: {self.max_weight}" )
         super().__init__(local_variator=local_variator, local_mutator=local_mutator)
         
     def rand(self):
@@ -384,28 +387,32 @@ class WeightedSet(CustomType):
 class WeightedSetMutation(LocalMutator):
     """A LocalMutator for a WeightedSet
     
+    Combines increasing or decreasing the subset size by one feature and mutating the weights associated with active features.
     """
     _supported_types = WeightedSet
-    __slots__ = (
-        "feature_mutation_prob", 
-        "weight_mutation_prob", 
-        "distribution_index"
-    )
+    __slots__ = ("feature_mutation_probability", "weight_mutation_probability", "distribution_index")
     
-    def __init__(self, feature_mutation_prob = 0.1, weight_mutation_prob = 0.1, distribution_index = 20):
+    def __init__(
+        self, 
+        feature_mutation_probability = 0.1, 
+        weight_mutation_probability = 0.1, 
+        distribution_index = 20.0):
         """
         Args:
-            feature_mutation_prob (float, optional): The probability that a feature will be randomly removed or added to a subset. Defaults to 0.1.
-            weight_mutation_prob (float, optional): _description_. Defaults to 0.1.
+            feature_mutation_probability (float, optional): The probability that a feature will be randomly removed or added to the subset. Defaults to 0.1.
+            weight_mutation_probability (float, optional): Probability that a pair of active features' weights are mutated. Defaults to 0.1.
+                - One feature's weight is increased and the other is decreased (so that the sum of all weights still equals 1.0)
+                - There is a small probability that other features' weights are mutated as well
+            distribution_index (float, optional): Controls spread of weight mutations. Defaults to 20.0.
         """        
-        self.feature_mutation_prob = feature_mutation_prob
-        self.weight_mutation_prob = weight_mutation_prob
+        self.feature_mutation_probability = feature_mutation_probability
+        self.weight_mutation_probability= weight_mutation_probability
         self.distribution_index = distribution_index
     
     def mutate(self, custom_type: WeightedSet, offspring_solution, variable_index, **kwargs):
         
-        feature_mutation_prob = 0 if custom_type.min_features == custom_type.max_features else self.feature_mutation_prob
-        weight_mutation_prob = self.weight_mutation_prob
+        feature_mutation_prob = 0 if custom_type.min_features == custom_type.max_features else self.feature_mutation_probability
+        weight_mutation_prob = self.weight_mutation_probability
         if not (feature_mutation_prob or weight_mutation_prob):
             return
         distribution_index = self.distribution_index
@@ -452,7 +459,7 @@ class WeightedSetMutation(LocalMutator):
             if not mutated:
                 active_feature_indices = np.random.permutation(active_feature_indices)
                 true_max_weight = custom_type._find_true_max_weight(num_active)
-            # print(f"min_weight: {custom_type.min_weight}, true_max {true_max_weight}, sum before = {np.sum(offspring_directory)}")
+            
             distribution_index = self.distribution_index
             real_probability = 1.0 / max(0.5, num_active - 1)
             for i in range(num_active - 1, 0, -1):
@@ -470,25 +477,37 @@ class WeightedSetMutation(LocalMutator):
                         offspring_directory[active_idx] = new_weight
                         offspring_directory[other_active_idx] = other_weight - diff
                         mutated = True
-                        
-                        
+                                  
         if mutated:
             offspring_solution.evaluated = False
 
 class WeightedSetCrossover(LocalVariator):
+    """A LocalVariator for a WeightedSet 
+    
+    Combines crossover of which features are active and crossover of the weights associated with active features"""
     _supported_types = WeightedSet
     _supported_arity = (2,None)
     _supported_noffspring = (1, None)
-    __slots__ = ("evolve_subset_prob", "weight_crossover_rate", "eta", "zeta")
+    __slots__ = ("subset_crossover_rate", "weight_crossover_rate", "eta", "zeta")
      
-    def __init__(self, evolve_subset_prob = 0.2, weight_crossover_rate = 0.2, eta = 0.25, zeta = 0.25):
-        self.evolve_subset_prob = evolve_subset_prob
+    def __init__(self, subset_crossover_rate = 0.2, weight_crossover_rate = 0.2, eta = 0.25, zeta = 0.25):
+        """
+        Args:
+            subset_crossover_rate (float, optional): The probability of crossing over the active features of parent solutions. Defaults to 0.2.
+                - The probability gate is applied to all offspring or none.
+            weight_crossover_rate (float, optional): The probability of crossing over the weights of active features. Defaults to 0.2.
+                - The probability gate is applied to the offspring individually
+                - Weight values are crossed over with parent-centric crossover
+            eta (float, optional): Controls distribution of weight crossovers. Defaults to 0.25.
+            zeta (float, optional): Controls distribution of weight crossovers. Defaults to 0.25.
+        """        
+        self.subset_crossover_rate = subset_crossover_rate
         self.weight_crossover_rate = weight_crossover_rate 
         self.eta = np.float32(eta)
         self.zeta = np.float32(zeta)
     
     def evolve(self, custom_type: WeightedSet, parent_solutions, offspring_solutions, variable_index, copy_indices, **kwargs):
-        evolve_subset_prob = self.evolve_subset_prob
+        evolve_subset_prob = self.subset_crossover_rate
         do_crossover = kwargs.get("crossover")
         do_feature_crossover = evolve_subset_prob > 0 and (do_crossover or np.random.uniform() < evolve_subset_prob) 
         weight_crossover_rate = self.weight_crossover_rate
@@ -562,10 +581,10 @@ class WeightedSetCrossover(LocalVariator):
                 if temp_directory is not None:
                     parent_vars[-1] = temp_directory
                     temp_directory = None
-                
                 continue
             
-            if do_weight_crossover: # Both crossovers
+            # Both crossovers
+            if do_weight_crossover: 
                 offspring_weights = normalized_2d_pcx(parent_vars, 1, eta, zeta)[0]
                 curr_active_indices = None
                 new_size = custom_type.min_features if custom_type.min_features == custom_type.max_features else gray_encoding_to_int(custom_type.min_features, custom_type.max_features, offspring_sizes[i])
@@ -618,12 +637,12 @@ class WeightedSetCrossover(LocalVariator):
                     active_features_indices[i] = new_active_indices
                     num_actives[i] = prev_size
                     curr_weights[i] = total_weight
-                    
                     continue
                 
                 prev_active_indices = list(np.where(curr_directory > 0)[0])
                 active_weight_array = total_feature_weights[prev_active_indices] + np.finfo(np.float32).tiny
                 active_weight_sum = np.sum(active_weight_array)
+                
                 # Remove features
                 if new_size < prev_size: 
                     new_active_indices = np.random.choice(prev_active_indices, size = new_size, replace = False, p = active_weight_array / active_weight_sum)
@@ -631,8 +650,8 @@ class WeightedSetCrossover(LocalVariator):
                     curr_weights[i] = -1
                     curr_directory[removed_indices] = 0
                     prev_active_indices = new_active_indices
-                # Add Features
-                else: 
+                
+                else: # Add Features
                     inactive_features= np.setdiff1d(np.arange(custom_type.total_features), prev_active_indices, assume_unique=True)
                     inactive_probabilities = total_feature_weights[inactive_features] + np.finfo(np.float32).tiny
                     inactive_weight_sum = np.sum(inactive_probabilities)
