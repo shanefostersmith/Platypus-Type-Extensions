@@ -2,13 +2,10 @@ import pytest
 import numpy as np
 import copy
 from typing import Literal
-# from platypus_extensions.distribution_extension.distributions import point_bounds, real_bijection
-# from platypus_extensions.distribution_extension.distributions.example_bijections import half_life_bijection
-# from platypus_extensions.distribution_extension.distributions.monotonic_distributions import *
-from ...distributions import point_bounds, real_bijection
-from ...distributions.example_bijections import half_life_bijection
-from ...distributions.monotonic_distributions import *
 from platypus_extensions.core import *
+from ...platypus_distributions import point_bounds, real_bijection
+from ...platypus_distributions.example_bijections import half_life_bijection
+from ...platypus_distributions.monotonic_distributions import *
 
 
 @pytest.fixture(

@@ -1,5 +1,5 @@
 [project]
-name = "platypus-type-extensions"
+name = "platypus-type-extensions-distributions"
 version = "0.1.0"
 dependencies = [
   "platypus-type-extensions>=0.1.0",
