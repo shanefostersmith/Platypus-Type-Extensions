@@ -1,7 +1,7 @@
 # Platypus-Type-Extensions
 
 This library introduces new variable types for multi-objective optimization, and associated crossover and mutation strategies. 
-It also includes a flexible framework to for defining new variable types and optimizing mixed-type problems with a single "global" variator.
+It also includes a flexible framework for defining new variable types and optimizing mixed-type problems with a single "global" variator.
 All variable types and strategies are fully compatible with the Platypus MOO framework.
 
 ## New Optimization Variables
