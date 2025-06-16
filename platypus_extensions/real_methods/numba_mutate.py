@@ -1,5 +1,5 @@
 import numpy as np
-from numba.np.random.new_random_methods import buffered_bounded_lemire_uint32
+from numba.np.random.random_methods import buffered_bounded_lemire_uint32
 from numba import (
     njit, guvectorize, 
     float32, float64, boolean,
