@@ -1,6 +1,6 @@
+from platypus_extensions.utils import _min_max_norm_convert, clip
 from .real_bijection import RealBijection
 from ._bounds_tools import BoundsViewMixin
-from ..utils import _min_max_norm_convert, clip
 from ._distribution_tools import *
 from numba import njit
 

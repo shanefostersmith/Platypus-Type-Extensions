@@ -1,7 +1,7 @@
 
 import numpy as np
 import pyomo.environ as pyo
-import platypus_extensions.distributions._bounds_tools as bound_tools
+import platypus_extensions.distribution_extension.distributions._bounds_tools as bound_tools
 from ._bounds_tools import CascadePriority, BoundsViewMixin
 from pyomo.environ import value
 from numbers import Number

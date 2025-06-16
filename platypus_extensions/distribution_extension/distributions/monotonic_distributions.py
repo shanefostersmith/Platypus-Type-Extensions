@@ -12,15 +12,18 @@
 
 import numpy as np
 from collections.abc import Iterable
-from ..core import CustomType, LocalMutator, LocalVariator
+from platypus_extensions.core import CustomType, LocalMutator, LocalVariator
+from platypus_extensions.utils import _min_max_norm_convert, _nbits_encode, int_to_gray_encoding, gray_encoding_to_int
+from platypus_extensions.real_methods.numba_pcx import normalized_2d_pcx
+from platypus_extensions.integer_methods.integer_methods import int_mutation, single_binary_swap
 from .real_bijection import RealBijection
 from .point_bounds import PointBounds, bound_tools
 from ._distribution_tools import DistributionInfo
 from ._mutation_tools import *
 from ._crossover_tools import *
-from ..real_methods.numba_pcx import normalized_2d_pcx
-from ..integer_methods.integer_methods import int_mutation, single_binary_swap
-from ..utils import _min_max_norm_convert, _nbits_encode, int_to_gray_encoding, gray_encoding_to_int
+# from ...real_methods.numba_pcx import normalized_2d_pcx
+# from ...integer_methods.integer_methods import int_mutation, single_binary_swap
+# from ...utils import _min_max_norm_convert, _nbits_encode, int_to_gray_encoding, gray_encoding_to_int
 
 class MonotonicDistributions(CustomType):
     """ 

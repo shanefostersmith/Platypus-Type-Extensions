@@ -1,12 +1,12 @@
 
 import numpy as np
 from collections.abc import Iterable
+from math import ceil, floor
+from platypus_extensions.utils import clip
 from .symmetric_bijection import SymmetricBijection
 from .point_bounds import PointBounds
 from .monotonic_distributions import MonotonicDistributions
 from ._distribution_tools import DistributionInfo
-from ..utils import clip
-from math import ceil, floor
 
 class SymmetricDistributions(MonotonicDistributions):
     """**Evolve and mutate a discrete set of symmetric distributions in the form of 1-D numpy arrays.**

@@ -1,11 +1,11 @@
 
 import pytest
 from platypus_extensions.core import LocalCompoundMutator
-from platypus_extensions.distributions.tests.conftest import create_one_var_solutions
-from platypus_extensions.distributions.monotonic_distributions import PointSeparationMutation, SampleCountMutation
-from platypus_extensions.distributions.symmetric_distributions import *
-from platypus_extensions.distributions.symmetric_bijection import *
-from platypus_extensions.distributions._distribution_tools import DistributionInfo
+from .conftest import create_one_var_solutions
+from ..monotonic_distributions import PointSeparationMutation, SampleCountMutation
+from ..symmetric_distributions import *
+from ..symmetric_bijection import *
+from .._distribution_tools import DistributionInfo
 
 def _linear_return(x, b, slope):
     return (b + slope*x)

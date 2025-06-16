@@ -1,6 +1,6 @@
 import pytest
-from platypus_extensions.distributions.monotonic_distributions import *
-from ...distributions.tests.conftest import *
+from ..monotonic_distributions import *
+from .conftest import *
 
 class TestFixedMapMonotonic:
     rtol = 1e-7

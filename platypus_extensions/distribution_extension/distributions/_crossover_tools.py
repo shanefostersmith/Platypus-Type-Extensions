@@ -1,5 +1,5 @@
 import numpy as np
-from ..utils import _min_max_norm_convert
+from platypus_extensions.utils import _min_max_norm_convert
 from ._bounds_tools import BoundsViewMixin
 from ._distribution_tools import DistributionInfo, ordered_y_bounds
 from .real_bijection import RealBijection
