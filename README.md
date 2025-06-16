@@ -37,7 +37,7 @@ With the distribution variable types:
 ```
     pip install "platypus-type-extensions[distributions] @ git+https://github.com/shanefostersmith/platypus-type-extensions.git"
 ```
-> Distribution types will be in installed a package 'platypus_distributions'
+> Distribution types will be installed in a separate package 'platypus_distributions'
 
 Or, from a local clone:
 ```
