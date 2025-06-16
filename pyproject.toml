@@ -23,14 +23,17 @@ readme = "README.md"
 
 [project.optional-dependencies]
 distributions = [
-    "pyomo>=6.8.2",
+  "platypus-type-extensions-distributions @ git+https://github.com/shanefostersmith/platypus-type-extensions.git@main#subdirectory=distributions",
+  "pytest>=7.0.0",
+  "pytest-mock>=3.10.0"
 ]
 test = ["pytest>=7.0.0","pytest-mock>=3.10.0"]
 full = [
   "numpy>=1.26.0",
   "numba>=0.60.0",
+  "scipy>=1.10.0",
   "platypus-opt>=1.4.1",
-  "pyomo>=6.8.2",
+  "platypus-type-extensions-distributions @ git+https://github.com/shanefostersmith/platypus-type-extensions.git@main#subdirectory=distributions",
 ]
 
 
