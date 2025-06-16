@@ -23,9 +23,7 @@ readme = "README.md"
 
 [project.optional-dependencies]
 distributions = [
-  "platypus-type-extensions-distributions @ \
-  git+https://github.com/shanefostersmith/platypus-type-extensions.git@main\
-  #subdirectory=platypus_extensions/distributions"
+  "platypus-type-extensions-distributions @ git+https://github.com/shanefostersmith/platypus-type-extensions.git@main#subdirectory=platypus_extensions/distributions"
 ]
 test = ["pytest>=7.0.0","pytest-mock>=3.10.0"]
 full = [
@@ -33,9 +31,7 @@ full = [
   "numba>=0.60.0",
   "scipy>=1.10.0",
   "platypus-opt>=1.4.1",
-  "platypus-type-extensions-distributions @ \
-  git+https://github.com/shanefostersmith/platypus-type-extensions.git@main\
-  #subdirectory=platypus_extensions/distributions"
+  "platypus-type-extensions-distributions @git+https://github.com/shanefostersmith/platypus-type-extensions.git@main#subdirectory=platypus_extensions/distributions"
 ]
 
 
