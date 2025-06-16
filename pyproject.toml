@@ -36,7 +36,13 @@ full = [
 
 [tool.setuptools.packages.find]
 where  = ["."]
-include = ["platypus_extensions*"]
-exclude = ["platypus_extensions.distributions"]
+include = [
+  "platypus_extensions",
+  "platypus_extensions.*"
+]
+exclude = [
+  "platypus_extensions.distributions",
+  "platypus_extensions.distributions.*"
+]
 
 
