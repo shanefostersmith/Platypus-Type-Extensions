@@ -42,7 +42,9 @@ include = [
 ]
 exclude = [
   "platypus_extensions.distribution_extension",
-  "platypus_extensions.distribution_extension.*"
+  "platypus_extensions.distribution_extension.*",
+  "platypus_extensions.experimental"
+  "platypus_extensions.experimental.*"
 ]
 
 

@@ -7,7 +7,7 @@ from warnings import warn
 from abc import ABCMeta, abstractmethod
 from multiprocessing import Value
 from collections.abc import Iterable
-from typing import Any, Type, Literal, Union, Generator, Optional
+from typing import Any, Type, Literal, Union, Generator, Iterator, Optional
 from types import MethodType
 from copy import deepcopy
 from functools import lru_cache, reduce, wraps
@@ -535,7 +535,7 @@ class GlobalEvolution(Variator):
         """Check if a CustomType or Platypus Type can be evolved given it's can_evolve property"""
         return (isinstance(problem_type, CustomType) and problem_type.can_evolve) or (not isinstance(problem_type, CustomType) and not self._ignore_generics)
     
-    def generate_types_to_evolve(self, problem: Problem) -> Generator[tuple[Union[CustomType,PlatypusType], int]]:
+    def generate_types_to_evolve(self, problem: Problem) -> Iterator[tuple[Union[CustomType,PlatypusType], int]]:
         """
         Generate CustomType objects and their variable_index 
         
@@ -547,7 +547,6 @@ class GlobalEvolution(Variator):
             problem: The Problem attribute of the Solution objects
 
         Yields:
-            Generator[tuple[CustomType | PlatypusType, int, LocalVariator | None]]:
             - A CustomType or Platypus Type of the object
             - variable_index: The index of the variable in the `offspring.variables` FixedLengthArray
         """  
@@ -556,7 +555,7 @@ class GlobalEvolution(Variator):
             if self.is_mutatable_type(var_type):
                 yield var_type, i
     
-    def generate_type_groups(self, problem: Problem) -> Generator[tuple[list[Union[CustomType,PlatypusType]], tuple[int]]]:
+    def generate_type_groups(self, problem: Problem) -> Iterator[tuple[list[Union[CustomType,PlatypusType]], list[int]]]:
         self._store_problem_types(problem)
         problem_types = problem.types
         for indices in self._indices_by_type:

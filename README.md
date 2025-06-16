@@ -35,18 +35,9 @@ Basic Install (no extras)
 
 With the distribution variable types:
 ```
-    pip install git+https://github.com/shanefostersmith/platypus-type-extensions.git#egg=platypus-type-extensions[distributions]
+    pip install "platypus-type-extensions[distributions] @ git+https://github.com/shanefostersmith/platypus-type-extensions.git"
 ```
-
-With the tests:
-```
-    pip install git+https://github.com/shanefostersmith/platypus-type-extensions.git#egg=platypus-type-extensions[tests]
-```
-
-With all extras (distributions + tests):
-```
-    pip install git+https://github.com/shanefostersmith/platypus-type-extensions.git#egg=platypus-type-extensions[full]
-```
+> Distribution types will be in installed a package 'platypus_distributions'
 
 Or, from a local clone:
 ```
@@ -59,11 +50,6 @@ Or, from a local clone:
     # Core + distributions
     pip install -e ".[distributions]"
 
-    # Core + tests
-    pip install -e ".[tests]"
-
-    # All extras
-    pip install -e ".[full]"
 ```
 
 ## Requirements
@@ -81,7 +67,7 @@ Or, from a local clone:
 The distribution extra also requires:
 - `pyomo>=6.8.2`
 
-The test extra also requires:
+The tests and distributions extras require:
 - `pytest>=7.0.0`
 - `pytest-mock>=3.10.0`
 
