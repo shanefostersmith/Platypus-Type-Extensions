@@ -34,4 +34,9 @@ full = [
   "platypus-type-extensions-distributions @git+https://github.com/shanefostersmith/platypus-type-extensions.git@main#subdirectory=platypus_extensions/distributions"
 ]
 
+[tool.setuptools.packages.find]
+where  = ["."]
+include = ["platypus_extensions*"]
+exclude = ["platypus_extensions.distributions"]
+
 
