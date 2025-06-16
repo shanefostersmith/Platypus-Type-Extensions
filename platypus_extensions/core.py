@@ -377,7 +377,7 @@ class LocalVariator(metaclass = ABCMeta):
     
     """
     Experimental: 
-    - contextvars for automatic override of probability attributes occurs + concurrency safe
+    - contextvars for automatic override of probability attributes + concurrency safe
     - allows CustomTypes to share LocalVariators, but update probability attributes separately
     """
     #@classmethod
@@ -404,13 +404,11 @@ class LocalMutator(LocalVariator, metaclass = ABCMeta):
     A subclass LocalVariator where there is exactly one offspring variable. These variators do not require a reference 'parent' Solution.
     
     The `evolve()` method can accept any number of offspring Solutions, and will mutate each one separately.
-    
-    Subclasses must implement a `mutate()` method. Unlike a LocalVariator, `mutate()` (and `evolve()`) cannot be class methods.
         `evolve()` should generally not be overriden.
     
     All subclass implementations of `mutute()` should include `**kwargs` in their signature so that any unexpected/irrelevant keyword arguments are safely ignored
 
-    (see `LocalVariator)
+    (see `LocalVariator`)
     """
     _supported_arity =  (1,None)
     _supported_noffspring = (1,None)

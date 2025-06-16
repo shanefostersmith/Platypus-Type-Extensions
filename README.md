@@ -1,17 +1,17 @@
 # Platypus-Type-Extensions
 
-This library introduces new optimization variable types for multi-objective optimization and associated crossover and mutation strategies. 
-It also includes a flexible framework to for defining new variable types and optimizing mixed-type problems within a single global variator.
+This library introduces new variable types for multi-objective optimization, and associated crossover and mutation strategies. 
+It also includes a flexible framework to for defining new variable types and optimizing mixed-type problems with a single "global" variator.
 All variable types and strategies are fully compatible with the Platypus MOO framework.
 
 ## New Optimization Variables
 
-- **Floating Point Arrays**
+- **Floating Point Array**
     - Optimize a Numpy array of floats with Numba-accelerated strategies 
-        - (PCX, Differential Evolution, Polynomial Mutation, etc.)
-- **Integer Arrays**
+    - (PCX, Differential Evolution, Polynomial Mutation, etc.)
+- **Integer Array**
     - Optimize a Numpy array of integers with Numba-accelerated strategies 
-        - (Integer Crossover, Binary Swap, Bit Flip, etc.)
+    - (Integer Crossover, Binary Swap, Bit Flip, etc.)
 - **SetPartition**:
     - Optimize a subset of elements partitioned into bins
 - **WeightedSet**:
@@ -89,15 +89,16 @@ The test extra also requires:
 
 The main difference between this library and the Platypus library is the distinction between "local" variators and "global" variators.
 
-- A `LocalVariator` or `LocalMutator` defines a crossover or mutation strategy for a one or more variable types
-    - Each optimization variable, including variables of the *same* type, can be assigned a different `LocalVariator`
-    - A `LocalVariator` also defines compatible arities for its `evolve()` method (ie. the number of parents and offspring solutions)
-        - A `LocalMutator` is a special type of `LocalVariator` that mutates one offspring solution at a time without using parent solutions
-
 - A `GlobalEvolution` directs the crossover and mutation of all optimization variables, and may define non-uniform mutation behavior, staggered convergence, etc.
 
+- A `LocalVariator` or `LocalMutator` defines a crossover or mutation strategy for specific variable type(s)
+    - Each optimization variable, including variables of the *same* type, can be assigned a different `LocalVariator`
+    - A `LocalVariator` also defines compatible arities for its `evolve()` method (ie. the number of input parent and offspring solutions)
+    - A `LocalMutator` is a special type of `LocalVariator` that mutates one offspring solution at a time without using parent solutions
+        - Its `evolve()` method can still accept any number of offspring solutions
+
 - This library also provides compound operators for `LocalVariator`:
-    - `LocalGAOperator`: Combine a `LocalVariator` with a `LocalMutator`
+    - `LocalGAOperator`: Combine a `LocalVariator` and a `LocalMutator`
     - `LocalCompoundMutator`: Compound any number of `LocalMutator`
     - `LocalSequentialOperator`: Compound any number of `LocalVariator` and `LocalMutator`
 
@@ -122,34 +123,39 @@ Optimizing three variables of two different types with Platypus's NSGAII algorit
 
     # Optimization variables
     step_variable1 = SteppedRange(
-        lower_bound = 0, upper_bound = 1, 
+        lower_bound = 0, 
+        upper_bound = 1, 
         step_value = 0.1, 
         local_variator = step_variator
     )
     step_variable2 = SteppedRange(
-        lower_bound = -1, upper_bound = 0,
+        lower_bound = -1, 
+        upper_bound = 0,
         step_value = 0.2, 
         local_variator = step_variator, 
         local_mutator = step_mutator
     ) 
-    real_list = RealList(real_list = [-0.1, 0.25, 0.5], local_mutator = real_list_mutator)
+    real_list_variable = RealList(
+        real_list = [-0.1, 0.25, 0.5], 
+        local_mutator = real_list_mutator
+    )
 
     # Problem definition
     def eval_func(vars):
         return [(var[0] + var[1]) / var[2]]
     problem = Problem(nvars = 3, nobjs = 1, function = eval_func)
-    problem.types[:] = [step_variable1, step_variable2, real_list]
+    problem.types[:] = [step_variable1, step_variable2, real_list_variable]
 
     # GlobalEvolution and Algorithm
     global_variator = GeneralGlobalEvolution(nparents = 4, noffspring = 2)
     algorithm = NSGAII(problem = problem, variator = global_variator)
     algorithm.run(10000)
 ```
-- `GeneralGlobalEvolution` executes the LocalVariators associated with the optimization variables during each step of the algorithm
+- `GeneralGlobalEvolution` executes the LocalVariator associated with the optimization variables during each step of the algorithm
 
-- Providing both a LocalVariator and a LocalMutator to an optimization variable automatically creates a `LocalGAOperator`.
+- Providing both a `LocalVariator` and a `LocalMutator` to an optimization variable automatically creates a `LocalGAOperator`
 
-- LocalVariators may be provided to optimization variables at initialization or after initialization (and may be altered or changed at any time)
+- LocalVariators may be provided to optimization variables at initialization or after initialization (and may be altered or replaced at any time)
 
 
 ## License
