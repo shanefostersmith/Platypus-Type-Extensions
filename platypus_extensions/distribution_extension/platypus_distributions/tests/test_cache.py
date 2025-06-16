@@ -1,10 +1,10 @@
 
 import pytest
+from random import random
 from time import perf_counter
-from platypus_extensions import GeneralGlobalEvolution
-from platypus import EvolutionaryStrategy, NSGAII
+from platypus_extensions import GeneralGlobalEvolution, CustomType
+from platypus import EvolutionaryStrategy, NSGAII, Solution, Problem
 from pytest_mock import MockerFixture
-from tests.conftest import unconstrainedProblem, Solution, CustomType
 from .conftest import HALF_LIFE_PARAMS, half_life_bijection
 from ..monotonic_distributions import MonotonicDistributions, DistributionShift, DistributionBoundsPCX
 from ..point_bounds import PointBounds
@@ -15,6 +15,9 @@ PROBABILITIES = [0.1, 0.25, 0.5]
 USE_CACHE = True
 ITERS = 1000
 MAX_POINTS = 250
+
+def _eval_func(vars):
+    return [random()]
 
 def _create_global_evolution_and_alg(problem, population_size = 2, offspring_size = 2):
     # global_ev = GeneralGlobalEvolution(nparents = 1, noffspring = 1, copy_method=0)
@@ -63,8 +66,9 @@ def _create_mono_distribtions(cache_type, mutation_probability = 0.99, cache_siz
                 use_cache = None if not USE_CACHE else cache_type,
             )
             distribs.append(distribution)
-
-    return unconstrainedProblem(*distribs)
+    problem = Problem(nvars = len(distribs), nobjs = 1, function=_eval_func)
+    problem.types[:] = distribs
+    return problem
     
 @pytest.fixture(scope = 'function')
 def single_memo_distribution(request):

@@ -1,8 +1,8 @@
 import pytest
 from math import floor
 from pyomo.util.infeasible import find_infeasible_constraints
-from ...platypus_distributions import _bounds_tools
-from ..point_bounds import *
+from platypus_distributions import _bounds_tools
+from platypus_distributions.point_bounds import *
 from .conftest import *
 
 class TestPointBounds:
@@ -279,12 +279,5 @@ def test_bijection_init(half_life_bounds):
             else y_from_x_max == y_from_min_last
     ), f"right-most y: {bijection.right_y_bounds[0]} (x_max: {bounds.upper_bound}), second-right y {bijection.right_y_bounds[1]} (min_last_x {bounds.min_last_point})"
 
-    bounds_state = bounds.create_bounds_state()
-    bijection_w_bound_state = real_bijection.RealBijection(
-        forward_func,
-        bounds_state,
-        inverse_func,
-        compute_y_bounds=True
-    )
     
         

@@ -137,7 +137,6 @@ class TestSymmetricDistributions:
             include_global_extrema=include_extrema,
             exclude_global_extrema=exclude_extrema,
             right_side_provided=right_provided,
-            create_bounds_state=True
         )
         
         sym_bij = SymmetricBijection(

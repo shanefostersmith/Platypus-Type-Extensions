@@ -3,9 +3,9 @@ import numpy as np
 import copy
 from typing import Literal
 from platypus_extensions.core import *
-from ...platypus_distributions import point_bounds, real_bijection
-from ...platypus_distributions.example_bijections import half_life_bijection
-from ...platypus_distributions.monotonic_distributions import *
+from platypus_distributions import point_bounds, real_bijection
+from platypus_distributions.example_bijections import half_life_bijection
+from platypus_distributions.monotonic_distributions import *
 
 
 @pytest.fixture(

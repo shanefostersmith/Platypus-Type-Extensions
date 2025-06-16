@@ -3,8 +3,8 @@ from functools import partial
 from collections.abc import Hashable
 from numbers import  Number
 from typing import Literal, Union, Optional
-from .point_bounds import PointBounds
-from ._bounds_tools import BoundsState
+from .point_bounds import PointBounds, BoundsState
+# from ._bounds_tools import BoundsState
 from ._distribution_tools import sym_bound_adjustment
 from .real_bijection import RealBijection
 
