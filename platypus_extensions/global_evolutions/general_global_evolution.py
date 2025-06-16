@@ -1,7 +1,7 @@
 from numpy import random
 from ..core import GlobalEvolution, LocalVariator
 from platypus import Solution, Problem
-from typing import Literal
+from typing import Literal, Union
 
 class GeneralGlobalEvolution(GlobalEvolution):
     """A generic GlobalEvolution
@@ -12,7 +12,7 @@ class GeneralGlobalEvolution(GlobalEvolution):
         self, 
         nparents: int,
         noffspring: int,
-        copy_method: int | Literal['sample'] | Literal['rand'] = 'rand',
+        copy_method: Union[int, Literal['sample'], Literal['rand']] = 'rand',
         global_dampener: float | None = None,
     ):      
         """

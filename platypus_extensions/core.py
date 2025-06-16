@@ -7,7 +7,7 @@ from warnings import warn
 from abc import ABCMeta, abstractmethod
 from multiprocessing import Value
 from collections.abc import Iterable
-from typing import Any, Type, Literal, Union, Generator
+from typing import Any, Type, Literal, Union, Generator, Optional
 from types import MethodType
 from copy import deepcopy
 from functools import lru_cache, reduce, wraps
@@ -50,7 +50,7 @@ class CustomType(PlatypusType):
     def __init__(self, 
                  local_variator = None,
                  local_mutator = None,
-                 encoding_memoization_type: Literal['cache', 'single'] | None  = None,
+                 encoding_memoization_type: Optional[Literal['cache', 'single']]  = None,
                  max_cache_size = 25):
         """
         If both a *local_variator* and *local_mutator* are provided, then a `LocalGAOperator` is automatically created
@@ -508,7 +508,7 @@ class GlobalEvolution(Variator):
     def get_parent_deepcopies(
         self,
         parents: list[Solution], 
-        copy_indices: int | list[int] | Literal['all'] = 'all') -> list[Solution]:      
+        copy_indices: Union[int, list[int], Literal['all']] = 'all') -> list[Solution]:      
         """ 
         Create a one or more deepcopies of a parent Solutions (ie. offspring Solutions)
    
