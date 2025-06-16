@@ -277,7 +277,7 @@ class LocalVariator(metaclass = ABCMeta):
     
     @abstractmethod
     def evolve(self, 
-               custom_type: CustomType | PlatypusType,
+               custom_type: Union[CustomType, PlatypusType],
                parent_solutions: list[Solution], 
                offspring_solutions: list[Solution], 
                variable_index: int,
@@ -306,7 +306,7 @@ class LocalVariator(metaclass = ABCMeta):
         raise NotImplementedError()
     
     @staticmethod
-    def get_solution_variables(solutions: Solution | Iterable[Solution], index) -> Any | list[Any]:
+    def get_solution_variables(solutions: Union[Solution, Iterable[Solution]], index) -> Union[object, list]:
         """Get the variable at an index for one or more solutions"""
         if isinstance(solutions, Solution):
             return solutions.variables[index]
@@ -415,10 +415,10 @@ class LocalMutator(LocalVariator, metaclass = ABCMeta):
     
     def evolve(
         self, 
-        custom_type: CustomType | PlatypusType,
+        custom_type: Union[CustomType,PlatypusType],
         parent_solutions: list[Solution],
-        offspring_solutions: Solution | list[Solution], 
-        variable_index: int | list[int],
+        offspring_solutions: Union[Solution, list[Solution]], 
+        variable_index: Union[int, list[int]],
         copy_indices,
         **kwargs) -> None:
         """ 
@@ -439,9 +439,9 @@ class LocalMutator(LocalVariator, metaclass = ABCMeta):
     @abstractmethod
     def mutate(
         self,
-        custom_type: CustomType | PlatypusType,
+        custom_type: Union[CustomType,PlatypusType],
         offspring_solution: Solution, 
-        variable_index: int | list[int],
+        variable_index: Union[int, list[int]],
         **kwargs) -> None:
         """
         A method that mutates one Solution variable in-place.
@@ -531,11 +531,11 @@ class GlobalEvolution(Variator):
         
         return out
     
-    def is_mutatable_type(self, problem_type: CustomType | PlatypusType) -> bool:
+    def is_mutatable_type(self, problem_type) -> bool:
         """Check if a CustomType or Platypus Type can be evolved given it's can_evolve property"""
         return (isinstance(problem_type, CustomType) and problem_type.can_evolve) or (not isinstance(problem_type, CustomType) and not self._ignore_generics)
     
-    def generate_types_to_evolve(self, problem: Problem) -> Generator[tuple[CustomType | PlatypusType, int]]:
+    def generate_types_to_evolve(self, problem: Problem) -> Generator[tuple[Union[CustomType,PlatypusType], int]]:
         """
         Generate CustomType objects and their variable_index 
         
@@ -556,7 +556,7 @@ class GlobalEvolution(Variator):
             if self.is_mutatable_type(var_type):
                 yield var_type, i
     
-    def generate_type_groups(self, problem: Problem) -> Generator[tuple[list[CustomType | PlatypusType], tuple[int]]]:
+    def generate_type_groups(self, problem: Problem) -> Generator[tuple[list[Union[CustomType,PlatypusType]], tuple[int]]]:
         self._store_problem_types(problem)
         problem_types = problem.types
         for indices in self._indices_by_type:
@@ -660,7 +660,7 @@ class LocalGAOperator(LocalVariator):
         self._supported_noffspring = local_variator._supported_noffspring
         self._supported_types = TypeTuple(*common_types)
         
-    def evolve(self, custom_type: CustomType | PlatypusType, parent_solutions, offspring_solutions, variable_index, copy_indices, **kwargs):
+    def evolve(self, custom_type: Union[CustomType,PlatypusType], parent_solutions, offspring_solutions, variable_index, copy_indices, **kwargs):
         if not type(custom_type) in self._supported_types:
             return 
         
@@ -780,7 +780,7 @@ class LocalSequentialOperator(LocalVariator):
     def __init__(
         self,
         local_variators: list[LocalVariator], 
-        offspring_selection: OffspringSelection | list[OffspringSelection] = 'previous',
+        offspring_selection: Union[OffspringSelection, list[OffspringSelection]] = 'previous',
         mutation_selection: MutationSelection = 'previous',
         randomize_start = False):  
         """`
@@ -887,7 +887,7 @@ class LocalSequentialOperator(LocalVariator):
         variators = ", ".join(type(var).__name__ for var in self.variators)
         return f"{self.__class__.__name__}(variators = ({variators}), types = {str(self._supported_types)}, min_arity = {self._supported_arity[0]}, min_noffspring = {self._supported_noffspring[0]}"
                 
-    def evolve(self, custom_type: CustomType | PlatypusType, parent_solutions, offspring_solutions, variable_index, copy_indices, **kwargs):
+    def evolve(self, custom_type: Union[CustomType,PlatypusType], parent_solutions, offspring_solutions, variable_index, copy_indices, **kwargs):
         if not type(custom_type) in self._supported_types:
             return 
         do_mutation = self._contains_mutation

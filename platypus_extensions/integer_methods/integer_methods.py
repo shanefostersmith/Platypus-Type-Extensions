@@ -9,7 +9,7 @@ def int_mutation(bits: np.ndarray, probability = 0.0):
 
     Args:
         bits (np.ndarray): 1d numpy array of np.bool_ elements (the gray encoding of an integer)
-        probability (float | numpy.float64): The probability an individual bit will be flipped. Defaults to 0.0
+        probability (float): The probability an individual bit will be flipped. Defaults to 0.0
             - If probability <= 0.0, will default to `1 / max(2, len(bits))`
             
     Returns:

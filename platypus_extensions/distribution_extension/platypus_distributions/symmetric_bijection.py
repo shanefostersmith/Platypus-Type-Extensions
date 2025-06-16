@@ -3,7 +3,7 @@ from math import ceil
 from functools import partial
 from collections.abc import Hashable
 from numbers import  Number
-from typing import Literal, Union
+from typing import Literal, Union, Optional
 from .point_bounds import PointBounds
 from ._bounds_tools import BoundsState
 from ._distribution_tools import DistributionInfo, sym_bound_adjustment
@@ -59,9 +59,9 @@ class SymmetricBijection(RealBijection):
         inverse_args: dict = {},
         include_global_extrema = False,
         exclude_global_extrema = False,
-        point_bounds: PointBounds | BoundsState | None = None,
+        point_bounds: Union[PointBounds, BoundsState, None] = None,
         precision: Literal['double','single'] = 'double',
-        unique_id: Hashable | None = None):
+        unique_id: Optional[Hashable] = None):
         """ 
         Args:
             forward_function (partial | callable): The function from x values to y values 

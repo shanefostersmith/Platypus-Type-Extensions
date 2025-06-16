@@ -135,7 +135,7 @@ def vectorized_to_norm(ranges: np.ndarray, values: np.ndarray, in_place = False)
         np.divide(values, denoms, out=values)
         return values
 
-def vectorized_from_norm(ranges: np.ndarray, values: np.ndarray, dtype: type = None, in_place = False):
+def vectorized_from_norm(ranges: np.ndarray, values: np.ndarray, dtype = None, in_place = False):
     """Convert a 1D or 2D array of values from 0-1 range to their original scale
     
     This function assumes there are no zero-width ranges
@@ -149,7 +149,7 @@ def vectorized_from_norm(ranges: np.ndarray, values: np.ndarray, dtype: type = N
             
             If 2D, must be true that: ``values.shape[1] == ranges.shape[0]``
             
-        dtype (type): Should be a numpy float type
+        dtype (type, optional): Should be a numpy float type
 
     Returns:
         np.ndarray: 1D array of floats
@@ -167,7 +167,7 @@ def vectorized_from_norm(ranges: np.ndarray, values: np.ndarray, dtype: type = N
         np.add(values, mins, out=values)
         return values
 
-def int_to_gray_encoding(value: int, min_value: int, max_value: int, nbits: int | None = None) -> np.ndarray:
+def int_to_gray_encoding(value: int, min_value: int, max_value: int, nbits = None) -> np.ndarray:
     """
     Combines all the steps of converting an integer into a gray encoding. 
     

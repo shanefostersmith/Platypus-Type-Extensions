@@ -14,7 +14,7 @@ class GlobalDifferential(GlobalEvolution):
     """
     def __init__(
         self, 
-        global_crossover_probability: float | None = None,
+        global_crossover_probability = None,
         ignore_generics = False,
         generic_step_size: float = 0.25,
         generic_crossover_rate: float = 0.25):

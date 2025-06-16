@@ -1,11 +1,12 @@
 import numpy as np
 from platypus import Solution, Problem, Real, Integer
 from collections.abc import Sequence
+from typing import Union, Optional
 from ..utils import vectorized_to_norm, vectorized_from_norm
 from ..real_methods.numba_pcx import normalized_2d_pcx
 from ..integer_methods.integer_methods import multi_int_crossover
 
-def _get_numpy_reals_and_ranges(parents: list[Solution], num_parents, problem: Problem, real_indices: Sequence | None):
+def _get_numpy_reals_and_ranges(parents: list[Solution], num_parents, problem: Problem, real_indices: Optional[Sequence]):
     parent_vars = None
     ranges = None
     
@@ -43,12 +44,12 @@ def _get_numpy_reals_and_ranges(parents: list[Solution], num_parents, problem: P
     return parent_vars, ranges, real_indices
     
 def real_pcx_evolve(parents: list[Solution], offspring: list[Solution], 
-                    eta: float | None = 0.1, 
-                    zeta: float | None = 0.1, 
-                    real_indices: Sequence | None = None,
-                    original_parent_indices: Sequence| int | None = None,
+                    eta: Optional[float] = 0.1, 
+                    zeta: Optional[float]= 0.1, 
+                    real_indices: Optional[Sequence] = None,
+                    original_parent_indices: Union[Sequence, int, None] = None,
                     output_dtype: type = float,
-                    return_normalized_reals = False) -> None | tuple[np.ndarray,np.ndarray]:
+                    return_normalized_reals = False) -> Union[None,tuple[np.ndarray,np.ndarray]]:
     """
     Evolve Platypus `Real` variable types with parent-centric crossover. This method will use a Numba "no-python" version of PCX.
     
@@ -168,7 +169,7 @@ def _get_2D_numpy_integer_array(solutions: list[Solution], problem: Problem, int
         bit_matrix[i] = np.array(sol.variables[integer_idx], np.bool_)
     return bit_matrix
         
-def integer_parent_crossover(parents: list[Solution], offspring: list[Solution], integer_indices = None, return_bool_arrays = False) -> None | tuple[list,list]:
+def integer_parent_crossover(parents: list[Solution], offspring: list[Solution], integer_indices = None, return_bool_arrays = False) -> Union[None,tuple[list,list]]:
     """
     Evolve Platypus Integer types with parent-centric crossover -i.e. offspring values are not used, just replaced.
     

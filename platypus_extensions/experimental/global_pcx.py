@@ -18,10 +18,10 @@ class GlobalPCX(GlobalEvolution):
         problem: Problem, 
         nparents: int,
         noffspring: int,
-        global_crossover_probability: float | None = None,
+        global_crossover_probability = None,
         ignore_generics =False,
-        eta: None | float = None,
-        zeta: None | float = None,
+        eta = None,
+        zeta = None,
         generic_only_eta_zeta: bool = False):
         """ `
         Args:

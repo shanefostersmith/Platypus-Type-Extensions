@@ -3,7 +3,7 @@ import inspect
 import uuid
 from warnings import warn
 from functools import partial
-from typing import Union, Tuple, Any
+from typing import Union, Tuple, Any, Optional
 from collections.abc import Hashable
 from numbers import Integral, Number
 from math import ceil
@@ -133,16 +133,16 @@ class RealBijection:
     def __init__(
         self, 
         forward_function: Union[callable, partial], 
-        x_point_bounds: PointBounds | BoundsState,
+        x_point_bounds: Union[PointBounds,BoundsState],
         inverse_function: Union[callable, partial, None]  = None, 
         fixed_forward_keywords: dict = {}, 
         fixed_inverse_keywords: dict = {}, 
         compute_y_bounds: bool = True, 
         y_min = None, 
         y_max = None, 
-        direction: bool | None = None, 
+        direction: Optional[bool] = None, 
         raise_execution_errors: bool = True, 
-        unique_id: Union[Hashable, None] = None):
+        unique_id: Optional[Hashable] = None):
         """
         Args:
             forward_function (Union[callable, partial]): The function mapping `x` values to `y` values (see notes on functions below)
@@ -344,7 +344,7 @@ class RealBijection:
             map_func.keywords.update(fixed_parameters)
             return map_func, required_not_provided
       
-    def update_keyword_args(self, forward_args: dict | None = None, inverse_args: dict | None  = None):
+    def update_keyword_args(self, forward_args: Optional[dict] = None, inverse_args: Optional[dict] = None,):
         "Update the keyword argument values of the forward mapping function and/or inverse mapping function"
         if forward_args:
             if not isinstance(self.forward_function, partial):
@@ -580,7 +580,7 @@ class RealBijection:
         return self._inverse_map
 
     @property
-    def point_bounds(self) -> PointBounds | BoundsState:
+    def point_bounds(self) -> Union[PointBounds,BoundsState]:
         """Get the `PointBounds` (or `BoundsState`) object. This object contains all getter methods for 'x'-value, cardinality and separation bounds.
         
         If 'x_point_bounds' is not a BoundsState, then this object should be used to change any `x` value bounds or point bounds"""
@@ -594,14 +594,14 @@ class RealBijection:
         return self._decreasing
     
     @property
-    def y_bounds(self) -> Tuple[Number | None, Number | None]:
+    def y_bounds(self) -> Tuple[Optional[Number], Optional[Number]]:
         """ `(minimum y value, maximum y value)`
             - If the direction is decreasing (i.e True), the minimum y value is associated with the upper x bound, and the maximum y value is associated with the lower x bound,
         """        
         return self._y_bounds
     
     @property
-    def left_y_bounds(self) -> tuple | None:
+    def left_y_bounds(self) -> Optional[tuple]:
         """Get *left* y bounds -> associated with the first point x_bounds.
         The order of the values depends on the direction (unlike the y_bounds property)
         
@@ -610,7 +610,7 @@ class RealBijection:
         return self._left_y_bounds
 
     @property
-    def right_y_bounds(self) -> tuple | None:
+    def right_y_bounds(self) -> Optional[tuple]:
         """Get *right* y bounds -> associated with the last point x bounds.
         The order of the values depends on the direction (unlike the y_bounds property)
         

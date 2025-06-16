@@ -1,4 +1,5 @@
 import numpy as np
+from typing import Optional
 from  ._tools import *
 from ..core import CustomType, LocalVariator, LocalMutator
 from ..utils import _nbits_encode, int_to_gray_encoding, gray_encoding_to_int
@@ -30,8 +31,8 @@ class SetPartition(CustomType):
     def __init__(
         self, 
         total_features: int, 
-        subset_size: int | None = None, 
-        bins: int | None = None, 
+        subset_size: Optional[int] = None, 
+        bins: Optional[int] = None, 
         equal_start = False,
         local_variator = None,
         local_mutator = None
@@ -290,7 +291,7 @@ class WeightedSet(CustomType):
     def __init__(self, 
                  total_features: int, 
                  min_subset_size: int, 
-                 max_subset_size: int | None = None,
+                 max_subset_size: Optional[int] = None,
                  min_weight: float = 0.01,
                  max_weight: float = 0.99, 
                  local_variator = None,

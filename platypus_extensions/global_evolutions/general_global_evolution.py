@@ -13,7 +13,7 @@ class GeneralGlobalEvolution(GlobalEvolution):
         nparents: int,
         noffspring: int,
         copy_method: Union[int, Literal['sample'], Literal['rand']] = 'rand',
-        global_dampener: float | None = None,
+        global_dampener: Union[float,None] = None,
     ):      
         """
         Args:

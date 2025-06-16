@@ -12,6 +12,7 @@
 
 import numpy as np
 from collections.abc import Iterable
+from typing import Optional
 from platypus_extensions.core import CustomType, LocalMutator, LocalVariator
 from platypus_extensions.utils import _min_max_norm_convert, _nbits_encode, int_to_gray_encoding, gray_encoding_to_int
 from platypus_extensions.real_methods.numba_pcx import normalized_2d_pcx
@@ -396,7 +397,7 @@ class SampleCountMutation(LocalMutator):
     _supported_types = MonotonicDistributions
     __slots__ = ("mutation_probability", "mutation_count_limit")
     
-    def __init__(self, mutation_probability = 0.1, mutation_count_limit: int | None = None):
+    def __init__(self, mutation_probability = 0.1, mutation_count_limit: Optional[int] = None):
         """
         Args:
             mutation_probability (float, optional): Defaults to 0.1.

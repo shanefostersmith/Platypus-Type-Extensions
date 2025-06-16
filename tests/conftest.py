@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 import copy
-from typing import Literal
+from typing import Literal, Union
 from platypus import Problem, Solution
 from platypus_extensions.core import CustomType, LocalVariator, LocalMutator
 from platypus_extensions.global_evolutions.general_global_evolution import GeneralGlobalEvolution
@@ -146,7 +146,7 @@ def unconstrainedProblem(*vars):
         problem.types[i] = v
     return problem
 
-def create_one_var_solutions(custom_type: CustomType, nparents = 2, noffspring = 1, deepcopy = False) -> tuple[list[Solution], list[Solution]] | tuple[None, Solution]:
+def create_one_var_solutions(custom_type: CustomType, nparents = 2, noffspring = 1, deepcopy = False):
     """Create Solution objects for a Variator or Mutator
     
     If deepcopy is True, deepcopies parents in order to create offspring solutions. 
@@ -217,7 +217,7 @@ def create_multi_var_solutions(
 
 def create_basic_global_evolution(
     arity, offspring, 
-    copy_method: int | Literal['sample', 'rand'] = 'rand'):
+    copy_method: Union[int,Literal['sample', 'rand']] = 'rand'):
     
     return GeneralGlobalEvolution(arity, offspring, copy_method)
     

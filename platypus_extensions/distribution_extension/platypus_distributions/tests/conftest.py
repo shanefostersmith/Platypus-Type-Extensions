@@ -282,7 +282,7 @@ def unconstrainedProblem(*vars):
         problem.types[i] = v
     return problem
 
-def create_one_var_solutions(custom_type: CustomType, nparents = 2, noffspring = 1, deepcopy = False) -> tuple[list[Solution], list[Solution]] | tuple[None, Solution]:
+def create_one_var_solutions(custom_type: CustomType, nparents = 2, noffspring = 1, deepcopy = False):
     """Create Solution objects for a Variator or Mutator
     
     If deepcopy is True, deepcopies parents in order to create offspring solutions. 

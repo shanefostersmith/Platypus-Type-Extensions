@@ -6,7 +6,7 @@ from ._bounds_tools import CascadePriority, BoundsViewMixin
 from pyomo.environ import value
 from numbers import Number
 from math import ceil
-from typing import Literal
+from typing import Literal, Optional, Union
 
 #FUTURE WORK:
     # Defines bounds as Params of a pyomo model, and defines the constraints of bounds.
@@ -105,7 +105,7 @@ class PointBounds(BoundsViewMixin):
         inclusive_lower = True,
         inclusive_upper = True,
         minimum_points: int  = 2,
-        maximum_points: int | None = None,
+        maximum_points: Optional[int]  = None,
         precision: Literal['single', 'double'] = 'single'
     ):
         """
@@ -234,7 +234,7 @@ class PointBounds(BoundsViewMixin):
         self.model.upper_bound = upper_bound
         self._cascade_from(CascadePriority.GLOBAL, 'max')   
     
-    def set_first_point_upper_bound(self, max_first_point: Number | None):    
+    def set_first_point_upper_bound(self, max_first_point: Optional[Number]):    
         """
         Set the upper bound of the first point
         
@@ -260,7 +260,7 @@ class PointBounds(BoundsViewMixin):
         self.model.max_first_point = max(self.lower_bound, min(self.upper_bound - eps, self.dtype(max_first_point)))
         self._cascade_from(CascadePriority.WIDTH)
     
-    def set_last_point_lower_bound(self, min_last_point: Number | None):
+    def set_last_point_lower_bound(self, min_last_point: Optional[Number]):
         """
         Set the lower bound of the last point (min value of the last point)
         
@@ -287,7 +287,7 @@ class PointBounds(BoundsViewMixin):
         self.model.min_last_point = min(self.upper_bound, max(self.lower_bound + eps, self.dtype(min_last_point)))  
         self._cascade_from(CascadePriority.WIDTH)
 
-    def set_min_separation(self, min_separation: Number | None):    
+    def set_min_separation(self, min_separation: Optional[Number]):    
         """
         Set the min separation (i.e. the minimum distance between adjacent points)
         
@@ -341,7 +341,7 @@ class PointBounds(BoundsViewMixin):
         self.model.max_separation = max(min_separation, self.max_separation)
         self._cascade_from(CascadePriority.SEPARATION, 'min')
         
-    def set_max_separation(self, max_separation: Number | None):
+    def set_max_separation(self, max_separation: Optional[Number]):
         """
         Set the max separation (i.e. the maximum distance between adjacent points)
         
@@ -366,7 +366,7 @@ class PointBounds(BoundsViewMixin):
         self.model.min_separation = min(self.min_separation, max_separation)
         self._cascade_from(CascadePriority.SEPARATION, 'max')
     
-    def set_min_points(self, min_points: Number | None): # Add option to change first last point boounds
+    def set_min_points(self, min_points: Optional[Number]): # Add option to change first last point boounds
         """
         Set the minimum number of points (inclusive)
             Will raise an error if min_points < 2
@@ -393,7 +393,7 @@ class PointBounds(BoundsViewMixin):
         self.model.max_points = max(min_points, self.max_points)
         self._cascade_from(CascadePriority.POINTS, 'min')
     
-    def set_max_points(self, max_points: Number | None): # Add options to change first last point boounds
+    def set_max_points(self, max_points: Optional[Number]): # Add options to change first last point boounds
         """
         Set the maximum number of points (inclusive)
             Will raise an error if max_points < 2
@@ -417,7 +417,7 @@ class PointBounds(BoundsViewMixin):
         self.model.min_points = min(self.min_points, max_points)
         self._cascade_from(CascadePriority.POINTS, 'max')
         
-    def set_fixed_width(self, width: Number | None):
+    def set_fixed_width(self, width: Optional[Number]):
         """Set a fixed width (inclusive) 
         
         Automatically sets the "max_first_point" and "min_last_point".
@@ -495,7 +495,7 @@ class PointBounds(BoundsViewMixin):
         self.model.min_last_lb_constr  = pyo.Constraint(rule = _min_last_lb_rule)
         self.model.min_last_ub_constr = pyo.Constraint(expr = self.model.min_last_point <= self.model.eff_upper)
     
-    def _cascade_from(self, level: CascadePriority, from_bound: Literal['max', 'min'] | None = None):
+    def _cascade_from(self, level: CascadePriority, from_bound: Optional[Literal['max', 'min']] = None):
         bound_state = self.create_bounds_state()
         if level <= CascadePriority.GLOBAL:
             bound_tools._cascade_from_global(
@@ -546,7 +546,7 @@ class PointBounds(BoundsViewMixin):
         return value(self.model.min_points)
 
     @property
-    def max_points(self) -> int | np.floating:
+    def max_points(self) -> Union[int, np.floating]:
         return value(self.model.max_points)
 
     @property
@@ -558,7 +558,7 @@ class PointBounds(BoundsViewMixin):
         return value(self.model.eff_upper)
 
     @property
-    def fixed_width(self) -> np.floating | None:
+    def fixed_width(self) -> Optional[np.floating]:
         return value(self.model.fixed_width) if self.fixed_set else None
     
     @property

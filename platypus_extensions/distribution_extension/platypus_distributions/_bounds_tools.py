@@ -3,6 +3,7 @@ import numpy as np
 from dataclasses import dataclass
 from math import ceil, floor
 from enum import IntEnum
+from typing import Union, Optional
 
 class CascadePriority(IntEnum):
     GLOBAL = 0
@@ -17,7 +18,7 @@ class BoundsViewMixin:
         raise NotImplementedError
 
     @property
-    def max_points(self) -> int | np.floating:
+    def max_points(self) -> Union[int, np.floating]:
         raise NotImplementedError
 
     @property
@@ -29,7 +30,7 @@ class BoundsViewMixin:
         raise NotImplementedError
 
     @property
-    def fixed_width(self) -> np.floating | None:
+    def fixed_width(self) -> Optional[np.floating]:
         raise NotImplementedError
     
     @property
@@ -180,13 +181,13 @@ class BoundsState(BoundsViewMixin):
     )
     _lower_bound: np.floating
     _upper_bound: np.floating
-    _fixed_width: np.floating | None
+    _fixed_width: Optional[np.floating] 
     _max_first_point: np.floating
     _min_last_point: np.floating
     _min_separation: np.floating
     _max_separation: np.floating
     _min_points: int
-    _max_points: int | np.floating
+    _max_points: Union[int,np.floating]
     _dtype: type
     
     @property
@@ -194,7 +195,7 @@ class BoundsState(BoundsViewMixin):
         return self._min_points
 
     @property
-    def max_points(self) -> int | np.floating:
+    def max_points(self) -> Union[int,np.floating]:
         return self._max_points
 
     @property
@@ -206,7 +207,7 @@ class BoundsState(BoundsViewMixin):
         return self._upper_bound
 
     @property
-    def fixed_width(self) -> np.floating | None:
+    def fixed_width(self) -> Optional[np.floating]:
         return self._fixed_width
     
     @property

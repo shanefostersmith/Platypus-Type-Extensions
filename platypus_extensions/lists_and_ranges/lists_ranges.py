@@ -3,7 +3,7 @@ import inspect
 from platypus import Solution
 from collections.abc import Sequence
 from bisect import bisect_left, bisect_right
-from typing import Literal
+from typing import Literal, Union
 from ..core import CustomType, LocalMutator, LocalVariator
 from ._tools import _stepped_range_mutation, _type_equals, find_closest_val
 from ..integer_methods.integer_methods import multi_int_crossover, int_cross_over, int_mutation, _cut_points
@@ -613,7 +613,7 @@ class RealList(CustomType):
     """    
     def __init__(
         self, 
-        real_list: list | tuple | np.ndarray,
+        real_list: Union[list,tuple,np.ndarray],
         local_variator = None,
         local_mutator = None):
         """
@@ -785,7 +785,7 @@ class StepMutation(LocalMutator):
     def __init__(self, mutation_probability = 0.1):
         self.mutation_probability = mutation_probability
     
-    def mutate(self, custom_type: SteppedRange | RealList, offspring_solution, variable_index, **kwargs):
+    def mutate(self, custom_type: Union[SteppedRange,RealList], offspring_solution, variable_index, **kwargs):
         mutation_prob = self.mutation_probability
         if np.random.uniform() < mutation_prob:
             if isinstance(custom_type, SteppedRange):
@@ -822,7 +822,7 @@ class ArrayCrossover(LocalVariator):
         """   
         self.array_crossover_rate = array_crossover_rate
     
-    def evolve(self, custom_type: MultiIntegerRange | MultiRealRange, parent_solutions, offspring_solutions, 
+    def evolve(self, custom_type, parent_solutions, offspring_solutions, 
                variable_index, copy_indices, **kwargs):
         nparents = len(parent_solutions)
         global_crossover_prob = self.array_crossover_rate

@@ -36,7 +36,7 @@ class GlobalEvolution2(Variator):
     def get_parent_deepcopies(
         self,
         parents: list[Solution], 
-        copy_indices: int | list[int] | Literal['all'] = 'all') -> list[Solution]:      
+        copy_indices) -> list[Solution]:      
         """ 
         Create a one or more deepcopies of a parent Solutions (ie. offspring Solutions)
    
@@ -59,12 +59,12 @@ class GlobalEvolution2(Variator):
         
         return out
     
-    def is_mutatable_type(self, problem_type: CustomType | PlatypusType) -> bool:
+    def is_mutatable_type(self, problem_type) -> bool:
         """Check if a CustomType or Platypus Type can be evolved given it's """
         return (isinstance(problem_type, CustomType) and problem_type.can_evolve) or (not isinstance(problem_type, CustomType) and not self._ignore_generics)
 
     
-    def generate_types_to_evolve(self, problem: Problem) -> Generator[tuple[CustomType | PlatypusType, int]]:
+    def generate_types_to_evolve(self, problem: Problem):
         """
         Generate CustomType objects and their variable_index 
         
