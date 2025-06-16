@@ -5,8 +5,7 @@ from warnings import warn
 from functools import partial
 from typing import Union, Tuple, Any, Optional
 from collections.abc import Hashable
-from numbers import Integral, Number
-from math import ceil
+from numbers import Number
 from .point_bounds import PointBounds
 from ._bounds_tools import BoundsState, _cascade_from_global
 

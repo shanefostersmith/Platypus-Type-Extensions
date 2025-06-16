@@ -4,7 +4,6 @@ from collections.abc import Iterable
 from math import ceil, floor
 from platypus_extensions.utils import clip
 from .symmetric_bijection import SymmetricBijection
-from .point_bounds import PointBounds
 from .monotonic_distributions import MonotonicDistributions
 from ._distribution_tools import DistributionInfo
 

@@ -1,8 +1,10 @@
 
 import numpy as np
 import pyomo.environ as pyo
-import platypus_extensions.distribution_extension.platypus_distributions._bounds_tools as bound_tools
-from ._bounds_tools import CascadePriority, BoundsViewMixin
+# import platypus_distributions._bounds_tools as bound_tools
+from ._bounds_tools import (
+    CascadePriority, BoundsViewMixin, BoundsState,
+    _cascade_from_global, _cascade_from_points, _cascade_from_separation)
 from pyomo.environ import value
 from numbers import Number
 from math import ceil
@@ -463,8 +465,8 @@ class PointBounds(BoundsViewMixin):
         self.fixed_set = True
         self._cascade_from(CascadePriority.WIDTH)
             
-    def create_bounds_state(self) -> bound_tools.BoundsState:
-        return bound_tools.BoundsState(
+    def create_bounds_state(self) -> BoundsState:
+        return BoundsState(
             _lower_bound     = self.lower_bound,
             _upper_bound     = self.upper_bound,
             _fixed_width     = self.fixed_width,
@@ -498,7 +500,7 @@ class PointBounds(BoundsViewMixin):
     def _cascade_from(self, level: CascadePriority, from_bound: Optional[Literal['max', 'min']] = None):
         bound_state = self.create_bounds_state()
         if level <= CascadePriority.GLOBAL:
-            bound_tools._cascade_from_global(
+            _cascade_from_global(
                 bound_state, 
                 from_min = False if not from_bound else from_bound == 'min',
                 adjustable_max_first = not self._manual_max_first,
@@ -506,7 +508,7 @@ class PointBounds(BoundsViewMixin):
                 adjustable_min_separation = not self._manual_min_separation,
                 adjustable_max_separation = not self._manual_max_separation)
         elif level <= CascadePriority.WIDTH:
-            bound_tools._cascade_from_points(
+            _cascade_from_points(
                 bound_state, 
                 from_max_points = None,
                 adjustable_max_first = not self._manual_max_first,
@@ -514,7 +516,7 @@ class PointBounds(BoundsViewMixin):
                 adjustable_min_separation = not self._manual_min_separation,
                 adjustable_max_separation = not self._manual_max_separation)
         elif level <= CascadePriority.POINTS:
-            bound_tools._cascade_from_points(
+            _cascade_from_points(
                 bound_state, 
                 from_max_points = None if not from_bound else from_bound == 'max',
                 adjustable_max_first = not self._manual_max_first,
@@ -522,7 +524,7 @@ class PointBounds(BoundsViewMixin):
                 adjustable_min_separation = not self._manual_min_separation,
                 adjustable_max_separation = not self._manual_max_separation)
         elif level <= CascadePriority.SEPARATION:
-            bound_tools._cascade_from_separation(
+            _cascade_from_separation(
                 bound_state, 
                 from_max_sep = False if not from_bound else from_bound == 'max',
                 adjustable_max_first = not self._manual_max_first,
@@ -531,7 +533,7 @@ class PointBounds(BoundsViewMixin):
                 adjustable_max_separation = not self._manual_max_separation)
         self._apply_state(level, bound_state)
     
-    def _apply_state(self, level: CascadePriority, bound_state: bound_tools.BoundsState):
+    def _apply_state(self, level: CascadePriority, bound_state: BoundsState):
         self.model.min_points = bound_state.min_points
         self.model.max_points = bound_state.max_points
         self.model.min_separation = bound_state.min_separation 

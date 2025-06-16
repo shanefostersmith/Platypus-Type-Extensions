@@ -18,7 +18,7 @@ from platypus_extensions.utils import _min_max_norm_convert, _nbits_encode, int_
 from platypus_extensions.real_methods.numba_pcx import normalized_2d_pcx
 from platypus_extensions.integer_methods.integer_methods import int_mutation, single_binary_swap
 from .real_bijection import RealBijection
-from .point_bounds import PointBounds, bound_tools
+from .point_bounds import PointBounds, BoundsState, _cascade_from_points
 from ._distribution_tools import DistributionInfo
 from ._mutation_tools import *
 from ._crossover_tools import *
@@ -178,10 +178,10 @@ class MonotonicDistributions(CustomType):
             encoding_memoization_type=encoding_memoization_type,
             max_cache_size=max_cache_size)
     
-    def _add_max_points(self, bounds: bound_tools.BoundsState, default_max_points: int):
+    def _add_max_points(self, bounds: BoundsState, default_max_points: int):
         """Adds default max points when using a BoundsState"""
         default_max_points = max(bounds.min_points, default_max_points)
-        bound_tools._cascade_from_points(default_max_points, from_max_points=True)
+        _cascade_from_points(default_max_points, from_max_points=True)
     
     def rand(self):
         
