@@ -268,8 +268,8 @@ class LocalVariator(metaclass = ABCMeta):
             Type["PlatypusType"]
         ]
     ] = TypeTuple()
-    _supported_arity: tuple[int, int | None] = None
-    _supported_noffspring:  tuple[int, int | None] = None 
+    _supported_arity: tuple[int, Optional[int]] = None
+    _supported_noffspring:  tuple[int, Optional[int]] = None 
     # _standard_methods = None
     # __read_only__ = False
     # __override_names__ = tuple()
@@ -281,7 +281,7 @@ class LocalVariator(metaclass = ABCMeta):
                parent_solutions: list[Solution], 
                offspring_solutions: list[Solution], 
                variable_index: int,
-               copy_indices: list[int | None],
+               copy_indices: list[Optional[int]],
                **kwargs) -> None: 
         """_summary_
         An abtract evolve method. 
@@ -313,7 +313,7 @@ class LocalVariator(metaclass = ABCMeta):
         return [s.variables[index] for s in solutions]
     
     @staticmethod
-    def get_no_copy_variables(parent_solutions: Iterable[Solution], variable_index, copy_index: int | None) -> list:
+    def get_no_copy_variables(parent_solutions: Iterable[Solution], variable_index, copy_index: Optional[int]) -> list:
         """Get all variables of parent solutions at 'variable_index', excluding the solution at 'copy_index'. 
         If copy_index is None or out of range, returns all variables of parent_solutions"""
         
