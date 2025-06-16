@@ -3,10 +3,10 @@ import pytest
 
 def main(): 
     TESTS = [
-        "custom_types/distributions/tests/test_bounds.py",
-        "custom_types/distributions/tests/test_distributions.py",
-        "custom_types/distributions/tests/test_symmetric.py",
-        "custom_types/distributions/tests/test_cache.py::test_lru_smoke",
+        "platypus_extensions/distributions/tests/test_bounds.py",
+        "platypus_extensions/distributions/tests/test_distributions.py",
+        "platypus_extensions/distributions/tests/test_symmetric.py",
+        "platypus_extensions/distributions/tests/test_cache.py::test_lru_smoke",
     ]
     sys.exit(pytest.main(TESTS))
  

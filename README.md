@@ -22,7 +22,7 @@ All variable types and strategies are fully compatible with the Platypus MOO fra
 - **Categories**
     - Optimize categorical variables
 - **SteppedRange**
-    - Optimize a number within a range a step values
+    - Optimize a number within a range of step values
 - **RealList**
     - Optimize a number within any sequence of numbers
 
@@ -151,7 +151,9 @@ Optimizing three variables of two different types with Platypus's NSGAII algorit
     algorithm = NSGAII(problem = problem, variator = global_variator)
     algorithm.run(10000)
 ```
-- `GeneralGlobalEvolution` executes the LocalVariator associated with the optimization variables during each step of the algorithm
+- `GeneralGlobalEvolution` executes the optimization variables' LocalVariators during each step of the algorithm
+    - You should ensure that the `nparents` and `noffspring` parameters are compatible with the LocalVariators' supported arities
+    - LocalMutators are compatible with any `nparents` and `noffspring`
 
 - Providing both a `LocalVariator` and a `LocalMutator` to an optimization variable automatically creates a `LocalGAOperator`
 
