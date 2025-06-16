@@ -4,4 +4,6 @@ version = "0.1.0"
 dependencies = [
   "platypus-type-extensions>=0.1.0",
   "pyomo>=6.8.2",
+  "pytest>=7.0.0",
+  "pytest-mock>=3.10.0",
 ]
