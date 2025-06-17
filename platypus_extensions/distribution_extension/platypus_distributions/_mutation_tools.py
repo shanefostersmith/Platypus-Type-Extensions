@@ -135,7 +135,6 @@ def map_conversion_y_based(
     new_separation = new_width / new_x_bounds.dtype(new_num_points - 1)
     return new_min_x, new_max_x, new_separation, new_num_points
 
-np.random.seed(123)
 def shift_mutation(x_bounds: BoundsViewMixin, output_min_x, output_max_x, shift_alpha, shift_beta, return_type):
         max_negative_shift = max(0.0, min(output_min_x - x_bounds.lower_bound, output_max_x - x_bounds.min_last_point))
         max_positive_shift = max(0.0, min(x_bounds.upper_bound - output_max_x , x_bounds.max_first_point - output_min_x))

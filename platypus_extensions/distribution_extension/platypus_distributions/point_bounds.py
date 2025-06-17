@@ -1,7 +1,6 @@
 
 import numpy as np
 import pyomo.environ as pyo
-# import platypus_distributions._bounds_tools as bound_tools
 from ._bounds_tools import (
     CascadePriority, BoundsViewMixin, BoundsState,
     _cascade_from_global, _cascade_from_points, _cascade_from_separation)

@@ -239,7 +239,6 @@ def _nbits_encode(min_value: int, max_value: int) -> int:
     
     - Assumes min_value < max_value and are integers
      """
-    print(f"min = {min_value}, max = {max_value}")
     return int(np.log2(max_value - min_value)) + 1
 
 @njit

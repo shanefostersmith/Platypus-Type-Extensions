@@ -83,7 +83,11 @@ class CategoryMutation(LocalMutator):
 class CategoryCrossover(LocalVariator):
     """A LocalVariator for Categories
     
-    Offspring categories are chosen from the parent Solutions' categories """
+    Offspring categories are chosen from the parent Solutions' categories 
+    
+    - *supported_arity*: min = 2, max = None
+    - *supported_noffspring*: min = 1, max = None
+    """
     _supported_types = Categories
     _supported_arity = (2, None)
     _supported_noffspring = (1, None)
@@ -178,7 +182,11 @@ class SteppedRange(CustomType):
 class SteppedRangeCrossover(LocalVariator):
     """ A LocalVariator for a SteppedRange
     
-    Does an integer crossover of parent steps to choose offspring step values"""
+    Does an integer crossover of parent steps to choose offspring step values
+    
+    - *supported_arity*: min = 2, max = None
+    - *supported_noffspring*: min = 1, max = None
+    """
     _supported_types = SteppedRange
     _supported_arity = (2, None)
     _supported_noffspring = (1, None)
@@ -337,7 +345,11 @@ class MultiIntegerMutation(LocalMutator):
 class MultiIntegerCrossover(LocalVariator):
     """A LocalVariator for MultiIntegerRange
     
-    Crossover of individual integers in parent arrays"""
+    Crossover of individual integers in parent arrays
+    
+    - *supported_arity*: min = 2, max = None
+    - *supported_noffspring*: min = 1, max = None
+    """
     _supported_types = MultiIntegerRange
     _supported_arity = (2, None)
     _supported_noffspring = (1, None)
@@ -390,7 +402,8 @@ class MultiIntegerCrossover(LocalVariator):
                         offspring.evaluated = False
 
 class MultiRealRange(CustomType):
-    """Evolve/mutate multiple floats simultaneously, where each float defines a range of values.
+    """
+    Evolve/mutate multiple floats simultaneously, where each float defines a range of values.
         Similar to evolving multiple Real types, but stored in a single array.
     
     Mutation occurs on an individual basis, while crossover can occur on both on an individual basis and over the set of all floats.
@@ -478,6 +491,9 @@ class MultiDifferentialEvolution(LocalVariator):
     """A LocalVariator for a MultiRealRange
     
     Applies differential evolution to individual floats or to all the offspring's floats
+    
+    - *supported_arity*: min = 4, max = 4
+    - *supported_noffspring*: min = 1, max = 1
     """
     _supported_types = MultiRealRange
     _supported_arity = (4,4)
@@ -542,6 +558,9 @@ class MultiPCX(LocalVariator):
     """A LocalVariator for a MultiRealRange
     
     Applies parent-centric crossover to all floats the offspring solutions
+    
+    - *supported_arity*: min = 2, max = None
+    - *supported_noffspring*: min = 1, max = None
     """
     _supported_types = MultiRealRange
     _supported_arity = (2,None)
@@ -681,7 +700,10 @@ class RealListPM(LocalMutator):
 class RealListDE(LocalVariator):
     """A LocalVariator for a RealList
     
-    Applies differential evolution and finds closest value"""
+    Applies differential evolution and finds closest value
+    
+    - *supported_arity*: min = 4, max = 4
+    - *supported_noffspring*: min = 1, max = 1"""
     _supported_types = RealList
     _supported_arity = (4, 4)
     _supported_noffspring = (1,1)
@@ -713,7 +735,11 @@ class RealListDE(LocalVariator):
 class RealListPCX(LocalVariator):
     """A LocalVariator for a RealList
     
-    Applies parent-centric crossover and finds closest value"""
+    Applies parent-centric crossover and finds closest value
+    
+    - *supported_arity*:      min = 2, max = None
+    - *supported_noffspring*: min = 1, max = None
+    """
     
     _supported_types = RealList
     _supported_arity = (2,None)
@@ -778,7 +804,8 @@ class RealListPCX(LocalVariator):
 class StepMutation(LocalMutator): 
     """A LocalMutator for a SteppedRange or RealList.
     
-    Mutates an offspring's value by incrementing up or down one step"""
+    Mutates an offspring's value by incrementing up or down one step
+    """
     _supported_types = (SteppedRange, RealList)
     __slots__ = ("mutation_probability")
     
@@ -808,6 +835,9 @@ class ArrayCrossover(LocalVariator):
     """A LocalVariator for a MultiIntegerRange or a MultiRealRange
     
     Replace sections of offspring arrays with sections of parent arrays
+    
+    - *supported_arity*: min = 2, max = None
+    - *supported_noffspring*: min = 1, max = None
     """
     _supported_types = (MultiIntegerRange, MultiRealRange)
     _supported_arity = (2, None)

@@ -28,18 +28,18 @@ All variable types and strategies are fully compatible with the Platypus MOO fra
 
 ## Installation
 
-Basic Install (no extras)
+Basic Install
 ```
     pip install git+https://github.com/shanefostersmith/platypus-type-extensions.git
 ```
 
-With the distribution variable types:
+Install with the distribution variable types:
 ```
     pip install "platypus-type-extensions[distributions] @ git+https://github.com/shanefostersmith/platypus-type-extensions.git"
 ```
-> Distribution types will be installed in a separate package 'platypus_distributions'
+> Distribution types are installed in a separate package "platypus_distributions"
 
-Or download all from a local clone:
+Or install an editable clone:
 ```
     git clone https://github.com/shanefostersmith/platypus-type-extensions.git
     cd platypus-type-extensions
@@ -63,21 +63,20 @@ Or download all from a local clone:
 The distribution extra also requires:
 - `pyomo>=6.8.2`
 
-The tests and distributions extras require:
+The tests and distributions extra require:
 - `pytest>=7.0.0`
 - `pytest-mock>=3.10.0`
 
 ## Usage
 
-The main difference between this library and the Platypus library is the distinction between "local" variators and "global" variators.
+An important difference between this library and the Platypus library is the distinction between "local" variators and "global" variators.
 
-- A `GlobalEvolution` directs the crossover and mutation of all optimization variables, and may define non-uniform mutation behavior, staggered convergence, etc.
+- A `GlobalEvolution` directs the crossover and mutation of all optimization variables
 
 - A `LocalVariator` or `LocalMutator` defines a crossover or mutation strategy for specific variable type(s)
     - Each optimization variable, including variables of the *same* type, can be assigned a different `LocalVariator`
-    - A `LocalVariator` also defines compatible arities for its `evolve()` method (ie. the number of input parent and offspring solutions)
-    - A `LocalMutator` is a special type of `LocalVariator` that mutates one offspring solution at a time without using parent solutions
-        - Its `evolve()` method can still accept any number of offspring solutions
+    - A `LocalVariator` defines compatible arities for its `evolve()` method (the number of input parent solutions and output offspring solutions)
+    - A `LocalMutator` is a special type of `LocalVariator` that mutates one offspring solution at a time
 
 - This library also provides compound operators for `LocalVariator`:
     - `LocalGAOperator`: Combine a `LocalVariator` and a `LocalMutator`
@@ -124,7 +123,7 @@ Optimizing three variables of two different types with Platypus's NSGAII algorit
 
     # Problem definition
     def eval_func(vars):
-        return [(var[0] + var[1]) / var[2]]
+        return [(vars[0] + vars[1]) / vars[2]]
     problem = Problem(nvars = 3, nobjs = 1, function = eval_func)
     problem.types[:] = [step_variable1, step_variable2, real_list_variable]
 
@@ -137,9 +136,9 @@ Optimizing three variables of two different types with Platypus's NSGAII algorit
     - You should ensure that the `nparents` and `noffspring` parameters are compatible with the LocalVariators' supported arities
     - LocalMutators are compatible with any `nparents` and `noffspring`
 
-- Providing both a `LocalVariator` and a `LocalMutator` to an optimization variable automatically creates a `LocalGAOperator`
-
 - LocalVariators may be provided to optimization variables at initialization or after initialization (and may be altered or replaced at any time)
+
+- Providing both a `LocalVariator` and a `LocalMutator` to an optimization variable automatically creates a `LocalGAOperator`
 
 
 ## License

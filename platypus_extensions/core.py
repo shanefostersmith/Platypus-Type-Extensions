@@ -570,7 +570,7 @@ class GlobalEvolution(Variator):
                     yield types, out_indices 
         
     def _store_problem_types(self, problem: Problem):
-        """Store indices of a Problem's variable types, only does not recalculate if it exists."""
+        """Store indices of a Problem's variable types. No recalculation if the variable is already set."""
         if self._indices_by_type is not None:
             return
         indices_by_type = {}

@@ -230,6 +230,9 @@ class ActiveBinSwap(LocalVariator):
     """A LocalVariator for a SetPartition
     
     Crossover the bins that 'active' features are assigned to (does nto change bin values). Inactive features are ignored
+    
+    - *supported_arity*: min = 2, max = None
+    - *supported_noffspring*: min = 1, max = None
     """
     
     _supported_types = SetPartition
@@ -485,7 +488,10 @@ class WeightedSetMutation(LocalMutator):
 class WeightedSetCrossover(LocalVariator):
     """A LocalVariator for a WeightedSet 
     
-    Combines crossover of which features are active and crossover of the weights associated with active features"""
+    Combines crossover of which features are active and crossover of the weights associated with active features
+    
+    - *supported_arity*: min = 2, max = None
+    - *supported_noffspring*: min = 1, max = None"""
     _supported_types = WeightedSet
     _supported_arity = (2,None)
     _supported_noffspring = (1, None)

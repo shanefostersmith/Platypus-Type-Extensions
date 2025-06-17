@@ -7,8 +7,8 @@
     # - Gradual tightening of PointBounds over generations
     # - Other potential optimizations 
         # Using elements known numeric optimizations for very large arrays, parameter optimization, or semi-guidance (recontextualized for EP and GP objectives)
-            #  Simulated annealing (SciPy dual-annealing, simanneal), BFGS, shared/continually updated 'velocity' term, greater focus of distribution shapes and spreads, etc.
-            #  May require a new GlobalEvolution with shared/persistant memory (tracking "directions" that are promising, while keeping novelty of EP and GP searches)
+            #  Shared/continually updated 'velocity' term, greater focus of distribution shapes and spreads, etc.
+            #  New GlobalEvolution with shared/persistant memory (tracking "directions" that are promising, while keeping novelty of EP and GP searches)
 
 import numpy as np
 from collections.abc import Iterable
@@ -22,9 +22,6 @@ from .point_bounds import PointBounds, BoundsState, _cascade_from_points
 from ._distribution_tools import DistributionInfo
 from ._mutation_tools import *
 from ._crossover_tools import *
-# from ...real_methods.numba_pcx import normalized_2d_pcx
-# from ...integer_methods.integer_methods import int_mutation, single_binary_swap
-# from ...utils import _min_max_norm_convert, _nbits_encode, int_to_gray_encoding, gray_encoding_to_int
 
 class MonotonicDistributions(CustomType):
     """ 
@@ -491,7 +488,10 @@ class PointSeparationMutation(LocalMutator):
 class FixedMapCrossover(LocalVariator):
     """A LocalVariator for MonotonicDistributions 
     
-    Choose offspring maps (candidate distributions) by crossing over parent maps."""
+    Choose offspring maps (candidate distributions) by crossing over parent maps
+    
+    - *supported_arity*: min = 2, max = None
+    - *supported_noffspring*: min = 1, max = None"""
     
     _supported_types = MonotonicDistributions
     _supported_arity =  (2, None)
@@ -557,6 +557,13 @@ class FixedMapCrossover(LocalVariator):
                     offspring.evaluated = False
     
 class DistributionBoundsPCX(LocalVariator):
+    """A LocalVariator for MonotonicDistributions
+    
+    Applies parent-centric crossover to the first value, last value and number of samples in the distribution.
+    
+    - *supported_arity*: min = 2, max = None
+    - *supported_noffspring*: min = 1, max = None
+    """
     _supported_types = MonotonicDistributions
     _supported_arity =  (2, None)
     _supported_noffspring =  (1, None)

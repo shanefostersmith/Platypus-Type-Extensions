@@ -12,7 +12,6 @@ Three methods of Gram-Schmidt process (modified, classic, batch)
 """
 
 EPSILON = float_info.epsilon
-seed = np.random.seed()
 _sig_tuple = namedtuple('signatures', ['valid32','valid64','invalid32','invalid64', 'cgs32', 'cgs64', 'offspring32', 'offspring64'] )
 S = _sig_tuple(
     valid32 = types.Tuple((float32[:, :], float32, uint32))(float32[:, :], uint32, uint32, float32[:], float32[:], float32[:, :]),
