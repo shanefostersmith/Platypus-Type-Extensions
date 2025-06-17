@@ -39,17 +39,13 @@ With the distribution variable types:
 ```
 > Distribution types will be installed in a separate package 'platypus_distributions'
 
-Or, from a local clone:
+Or download all from a local clone:
 ```
     git clone https://github.com/shanefostersmith/platypus-type-extensions.git
     cd platypus-type-extensions
 
-    # Core library only
-    pip install -e .
-
-    # Core + distributions
-    pip install -e ".[distributions]"
-
+    # All dependencies
+    pip install -e ".[full]"
 ```
 
 ## Requirements

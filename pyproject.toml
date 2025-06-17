@@ -31,7 +31,9 @@ full = [
   "numba>=0.60.0",
   "scipy>=1.10.0",
   "platypus-opt>=1.4.1",
-  "platypus-type-extensions-distributions @ git+https://github.com/shanefostersmith/platypus-type-extensions.git@main#subdirectory=platypus_extensions/distribution_extension"
+  "pyomo>=6.8.2",
+  "pytest>=7.0.0",
+  "pytest-mock>=3.10.0",
 ]
 
 [tool.setuptools.packages.find]
